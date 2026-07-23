@@ -1,0 +1,71 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+
+  "lsp": true,
+  "formatter": false,
+  "autoupdate": true,
+  "shell": "/bin/zsh",
+
+  "compaction": {
+    "auto": true,
+    "prune": true,
+    "reserved": 12000
+  },
+
+  "provider": {
+    "cliproxy": {
+      "npm": "@ai-sdk/openai-compatible",
+      "options": {
+        "baseURL": "{env:CLIPROXY_API_URL}",
+        "apiKey": "{env:CLIPROXY_API_KEY}",
+        "timeout": 120000,
+        "chunkTimeout": 30000,
+        "setCacheKey": true
+      },
+      "models": {
+        "deep": {
+          "name": "Deep (Maximum Reasoning)"
+        },
+        "smart": {
+          "name": "Smart (Advanced Tasks)"
+        },
+        "general": {
+          "name": "General (Default)"
+        },
+        "fast": {
+          "name": "Fast (Low Latency)"
+        }
+      }
+    }
+  },
+
+  "model": "cliproxy/general",
+  "small_model": "cliproxy/fast",
+
+  "watcher": {
+    "ignore": [
+      "node_modules/**",
+      "dist/**",
+      "coverage/**",
+      ".next/**",
+      ".nx/**",
+      ".turbo/**",
+      "cdk.out/**",
+      "*.log"
+    ]
+  },
+
+  "mcp": {
+    "github": {
+      "type": "local",
+      "command": [
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-github"
+      ],
+      "environment": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "{env:GITHUB_PERSONAL_ACCESS_TOKEN}"
+      }
+    }
+  }
+}
