@@ -1,5 +1,6 @@
 ---
 description: Implement a focused change immediately with minimal investigation and verification.
+agent: build
 model: cliproxy/general
 ---
 

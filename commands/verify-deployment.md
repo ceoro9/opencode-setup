@@ -1,5 +1,6 @@
 ---
 description: Verify a recently merged change reached a final deployment state and report evidence.
+agent: build
 model: cliproxy/general
 ---
 

@@ -1,6 +1,8 @@
 ---
 description: Reason deeply about a technical challenge, possible solutions, and trade-offs without implementation.
+agent: code-architect-fast
 model: cliproxy/deep
+subtask: true
 ---
 
 Reason about the following challenge:

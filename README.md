@@ -91,6 +91,19 @@ Commands are selected by the outcome you need. Use the narrowest workflow that f
 | `/prepare-pr` | Implementation cycles are complete and the changes need a final readiness decision and PR description. | Readiness verdict, blockers, PR title, summary, and validation notes. |
 | `/verify-deployment` | A merged change needs pipeline and post-deployment validation. | Deployment status, evidence, verification gaps, and next action. |
 
+## Specialized Agents
+
+Commands use focused, read-only sub-agents for analysis and independent quality gates.
+
+| Agent | Purpose | Used by |
+| --- | --- | --- |
+| `code-architect-fast` | Investigates repository context and produces implementation plans or technical trade-off analysis without changing files. | `/deep-plan`, `/deep-reason` |
+| `code-review-final` | Independently reviews a task-specific change for correctness, regressions, security, compatibility, scope, and maintainability. | `/implement-cycle`, `/review` |
+| `test-reviewer` | Independently evaluates whether tests and verification provide meaningful confidence in changed behavior. | `/implement-cycle` |
+| `code-review-intermediate` | Evaluates the complete change for PR readiness and prepares the title, summary, and validation notes. | `/prepare-pr` |
+
+The names remain stable for command compatibility, but each agent has one distinct responsibility. Specialized agents use default-deny permissions, are read-only, return structured findings, and never fix their own findings. Reviewer findings are validated before aggregation: any validated blocking or major finding requires another cycle, while rejected findings do not affect the verdict.
+
 ## Choosing a Command
 
 Use this decision path:

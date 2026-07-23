@@ -1,5 +1,6 @@
 ---
 description: Complete one autonomous implementation cycle, then obtain independent code and test reviews for human evaluation.
+agent: build
 model: cliproxy/general
 ---
 
@@ -30,13 +31,14 @@ Complete exactly one cycle. Do not automatically begin another implementation cy
 ## Phase 1: Implement and Verify
 
 1. Inspect repository state and preserve pre-existing user changes.
-2. Investigate the relevant code, tests, configuration, call sites, and conventions.
-3. Confirm the requested outcome, constraints, and acceptance criteria.
-4. Form a short internal implementation plan.
-5. Implement the smallest complete solution.
-6. Add or update tests when they provide meaningful protection.
-7. Run the narrowest relevant checks first, then broader tests, lint, formatting, and type checks when justified.
-8. Inspect the final diff for correctness, scope, and unintended changes.
+2. Capture the initial Git status and relevant diff as the cycle baseline. Record pre-existing changed files and overlapping modifications.
+3. Investigate the relevant code, tests, configuration, call sites, and conventions.
+4. Confirm the requested outcome, constraints, and acceptance criteria.
+5. Form a short internal implementation plan.
+6. Implement the smallest complete solution.
+7. Add or update tests when they provide meaningful protection.
+8. Run the narrowest relevant checks first, then broader tests, lint, formatting, and type checks when justified.
+9. Inspect the cycle-specific diff for correctness, scope, and unintended changes.
 
 Ask the user before implementation only when missing information materially changes behavior, compatibility, architecture, security, or risk.
 
@@ -53,11 +55,15 @@ Give each reviewer:
 - relevant prior-cycle findings and user decisions
 - additional user notes for the current cycle
 - the intended behavior and acceptance criteria
-- the complete set of files changed by this cycle
+- the initial workspace baseline
+- the cycle-specific patch or best available delta
+- files touched by this cycle and any pre-existing modifications within them
 - verification commands and results
 - relevant constraints and known limitations
 
-Reviewers must not modify files. Treat their conclusions as independent evidence and validate each finding against the code before reporting it.
+If cycle changes overlap pre-existing edits and cannot be separated reliably, disclose that limitation to both reviewers.
+
+Reviewers must not modify files. Require their structured verdict and findings, preserve reviewer attribution, and validate each finding against the code before reporting it.
 
 ## Stop Condition
 
@@ -92,6 +98,16 @@ Stop after presenting the implementation and independent review. The user decide
 - validated test-review findings
 - rejected reviewer findings and why, when relevant
 
+After validating reviewer findings, normalize each review outcome from the findings that remain valid. Rejected findings must not affect the combined verdict.
+
+Determine the combined verdict using these rules:
+
+- `refinement required` when any validated blocking or major finding remains.
+- `refinement recommended` when no blocking or major finding remains but at least one validated minor material finding remains.
+- `ready` only when no validated material finding remains and no material verification gap prevents confidence.
+
+If normalization changes a reviewer's original verdict, state the original verdict, normalized outcome, and reason.
+
 ### Next-Cycle Refinement Brief
 
 If refinement is recommended or required, provide a self-contained brief containing:
@@ -106,7 +122,7 @@ If refinement is recommended or required, provide a self-contained brief contain
 
 Retain this brief as session context for the next `/implement-cycle`; the user must not need to paste it back. Merge any new user notes into it on the next invocation.
 
-If no refinement is needed, state: `No additional implementation cycle is required.`
+State `No additional implementation cycle is required.` only when the combined verdict is `ready`.
 
 ## Rules
 

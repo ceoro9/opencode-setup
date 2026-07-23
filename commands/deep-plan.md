@@ -1,6 +1,8 @@
 ---
 description: Investigate a task deeply and produce an implementation-ready plan without changing code.
+agent: code-architect-fast
 model: cliproxy/deep
+subtask: true
 ---
 
 Analyze the following task and produce a concrete implementation plan:

@@ -1,5 +1,6 @@
 ---
 description: Reproduce, diagnose, and fix a specific bug with focused regression verification.
+agent: build
 model: cliproxy/general
 ---
 

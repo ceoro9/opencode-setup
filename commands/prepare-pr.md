@@ -1,6 +1,8 @@
 ---
 description: Evaluate whether current changes are ready for a pull request and prepare PR content without fixing code.
+agent: code-review-intermediate
 model: cliproxy/smart
+subtask: true
 ---
 
 Evaluate the current changes for pull-request readiness. Use this context when provided:
@@ -9,7 +11,7 @@ $ARGUMENTS
 
 Rules:
 
-- Do not modify files or create a pull request unless explicitly requested.
+- Do not modify files or create a pull request. This command only evaluates readiness and prepares PR content.
 - Inspect repository status, the complete diff, relevant tests, and validation results.
 - Check correctness, scope, compatibility, maintainability, security, and test confidence.
 - Distinguish blocking issues from non-blocking observations.

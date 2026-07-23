@@ -1,5 +1,6 @@
 ---
 description: Investigate, briefly plan, implement, and verify a software change.
+agent: build
 model: cliproxy/general
 ---
 
