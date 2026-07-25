@@ -51,7 +51,7 @@ Ask the user before implementation only when missing information materially chan
 
 After implementation and verification are complete, delegate review concurrently when possible:
 
-- `code-review-final`: review the complete task diff for correctness, regressions, scope, complexity, consistency, security, and maintainability.
+- `code-review-intermediate`: perform a focused cycle-level sanity review for correctness, regressions, scope, compatibility, security, and maintainability. Its verdict is advisory and cannot authorize PR creation.
 - `test-reviewer`: review the changed behavior and tests for meaningful coverage, correctness, failure paths, and maintainability.
 
 Give each reviewer:

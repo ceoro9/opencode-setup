@@ -41,10 +41,11 @@ flowchart TD
     Decision -- Change direction --> Reason
     Decision -- Accept --> Prepare["/prepare-pr"]
 
-    Prepare --> Ready{Ready?}
+    Prepare --> Ready{Final review passes?}
     Ready -- No --> Cycle
-    Ready -- Yes --> PR([Create PR])
-    PR --> Deploy["/verify-deployment"]
+    Ready -- Yes --> PR([Create PR automatically])
+    PR --> Manual([Human reviews PR link])
+    Manual --> Deploy["/verify-deployment"]
 
     Start -. small change .-> Fast["/implement-fast"]
     Start -. normal change without review .-> Implement["/implement"]
@@ -68,8 +69,10 @@ Every cycle presents one human decision package:
 - **Scope** — requested and delivered scope, exclusions, and preserved constraints.
 - **Implementation** — changed behavior, affected components, and key decisions.
 - **Verification** — checks, results, and evidence gaps.
-- **Readiness review** — synthesized code/test findings and combined verdict.
+- **Intermediate review** — synthesized cycle-level code/test findings and advisory verdict.
 - **Next action** — accept, refine, clarify direction, or obtain external verification.
+
+Intermediate reviews inside `/implement-cycle` are isolated sanity checks for human evaluation; they never authorize PR creation. When the human accepts the cycle result, invoking `/prepare-pr` conditionally authorizes the delivery workflow. It delegates the complete change to `code-review-final`, and only that validated final `ready` verdict opens the gate to validate or create a dedicated branch, commit remaining intended changes, push to a verified destination, create the pull request, and return its URL for manual review. A failing final verdict creates no Git or remote changes and sends the work back to another cycle.
 
 If another cycle is needed, prior plans, accepted findings, decisions, and unresolved work carry forward automatically in the same session:
 
@@ -91,7 +94,7 @@ Review findings are never applied automatically; the human decides whether anoth
 | `/implement` | Implement and verify without independent reviewers. |
 | `/fix` | Diagnose and fix a bug with regression verification. |
 | `/review` | Perform a standalone read-only code review. |
-| `/prepare-pr` | Evaluate final delivery readiness and prepare PR content. |
+| `/prepare-pr` | Run final readiness review and automatically create the PR when it passes. |
 | `/verify-deployment` | Verify pipeline and deployment state without changing remote systems. |
 
 ## Agents
@@ -99,16 +102,18 @@ Review findings are never applied automatically; the human decides whether anoth
 | Agent | Responsibility |
 | --- | --- |
 | `code-architect-fast` | High-level reasoning and concise execution planning. |
-| `code-review-final` | Independent implementation review. |
-| `test-reviewer` | Independent test and verification review. |
-| `code-review-intermediate` | Complete-change PR readiness evaluation. |
+| `code-review-intermediate` | Fast, advisory sanity review for implementation cycles and `/review`; never authorizes PR creation. |
+| `test-reviewer` | Independent test and verification review during implementation cycles. |
+| `code-review-final` | Final complete-change readiness gate and PR content; its validated `ready` verdict is required for PR creation. |
 
-Specialized agents use default-deny, read-only permissions. Reviewers never fix their own findings.
+Specialized agents use default-deny, read-only permissions. Reviewers never fix their own findings. Intermediate verdicts guide cycle decisions; only the final reviewer gates PR creation.
 
 ## Boundaries
 
 - Human selection is required before planning when materially different solutions remain.
 - Reasoning and planning never implement changes.
 - Implementation ignores rejected alternatives after a canonical plan exists.
-- `/prepare-pr` does not create a PR.
+- Intermediate code/test reviews are advisory and cannot authorize PR creation.
+- `/prepare-pr` creates a PR only after a validated `ready` verdict from `code-review-final`; it never merges or enables auto-merge.
+- The created PR URL is returned to the human for manual review.
 - `/verify-deployment` does not deploy, roll back, or modify remote systems without explicit instruction.

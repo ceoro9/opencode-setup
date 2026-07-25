@@ -1,6 +1,6 @@
 ---
 description: Review current changes for correctness, regressions, scope, and maintainability without editing code.
-agent: code-review-final
+agent: code-review-intermediate
 model: cliproxy/smart
 subtask: true
 ---
