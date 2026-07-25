@@ -13,7 +13,12 @@ $ARGUMENTS
 ## Cycle Context
 
 - On the first invocation, treat the user input as the original task.
-- On later invocations in the same session, recover the original task, prior cycle results, validated review findings, refinement brief, unresolved risks, and user decisions from the conversation history.
+- If a complete `/deep-plan` result exists earlier in the main conversation, treat it as the canonical and self-contained execution handoff for the task. Use its selected solution, scope, constraints, ordered tasks, risks, success criteria, and verification strategy as implementation input.
+- Once a canonical plan exists, do not use the earlier `/deep-reason` alternatives analysis as implementation context. Ignore rejected options, comparative trade-offs, and non-selected risks.
+- Consult the earlier reasoning artifact only if the canonical plan explicitly identifies a missing decision or repository evidence makes the selected solution infeasible or unsafe. Stop for human judgment instead of switching solutions.
+- Revalidate repository state before editing because the plan describes intended outcomes, not guaranteed current code details.
+- Do not require the user to paste or restate the plan. Do not replace it with a shorter summary.
+- On later invocations in the same session, recover the original task, canonical selected-solution plan, prior cycle results, validated review findings, refinement brief, unresolved risks, and user decisions from the conversation history. Do not recover rejected solution details.
 - Treat new user input as additional notes, changed constraints, accepted or rejected findings, or a request to continue. Do not require the user to repeat or paste prior findings.
 - Build the current cycle scope from the accumulated context. Latest explicit user instructions take precedence over earlier cycle notes.
 - Carry unresolved accepted findings forward until implemented, rejected by the user, or proven invalid.
@@ -52,6 +57,7 @@ After implementation and verification are complete, delegate review concurrently
 Give each reviewer:
 
 - the original task
+- the canonical selected-solution `/deep-plan` handoff when available; do not supply the full alternatives analysis
 - relevant prior-cycle findings and user decisions
 - additional user notes for the current cycle
 - the intended behavior and acceptance criteria
