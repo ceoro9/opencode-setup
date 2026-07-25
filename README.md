@@ -1,6 +1,74 @@
 # opencode-setup
 
-Personal opencode configuration built around human-controlled implementation cycles.
+Personal opencode configuration for reliable, human-directed agentic software development.
+
+## Design Philosophy
+
+This setup treats an AI agent as a capable implementation partner, not an autonomous owner of the engineering process. The agent can investigate a repository, make local decisions, implement changes, run verification, and obtain independent review. The human remains responsible for intent, priorities, trade-offs, and deciding when the result is acceptable.
+
+Long-running autonomous execution creates a predictable risk: each assumption, implementation choice, and local optimization can move the work farther from the original goal. Even when every individual step appears reasonable, accumulated decisions may change scope, preserve the wrong behavior, or optimize for what is easy to verify rather than what the user actually needs.
+
+The workflow limits that drift through bounded implementation cycles:
+
+```text
+human intent
+    ↓
+implementation and verification
+    ↓
+independent code and test review
+    ↓
+human decision
+    ├─ accept
+    ├─ refine with additional guidance
+    └─ change direction
+```
+
+Each cycle gives the agent enough autonomy to complete meaningful work, but ends before it can reinterpret review feedback and continue indefinitely. This creates a deliberate checkpoint where the human can compare the result with the original objective, reject incorrect assumptions, adjust constraints, and decide whether another cycle is worth the cost.
+
+## Why Implementation Cycles
+
+A cycle is a bounded unit of work with a clear beginning and end. It includes investigation, implementation, testing, verification, and review, but not automatic continuation into another iteration.
+
+This boundary provides:
+
+- **Controlled autonomy** — the agent can complete a coherent solution without requesting approval for every low-risk technical choice.
+- **Goal alignment** — the human can regularly verify that the work still solves the intended problem.
+- **Scope control** — review findings do not silently expand into unrelated cleanup or redesign.
+- **Traceable decisions** — each iteration records what changed, why, how it was verified, and what remains unresolved.
+- **Recoverability** — incorrect assumptions are caught after one bounded cycle instead of compounding across an open-ended run.
+
+A new cycle is justified only when validated findings or new human guidance require implementation changes. Optional improvements remain outside the scope unless the human explicitly accepts them.
+
+## Why Independent Review
+
+The implementation agent cannot be fully independent when reviewing its own work. It carries the same assumptions and reasoning that produced the solution, making it more likely to defend the chosen approach or overlook matching blind spots.
+
+This setup delegates the completed change to separate, read-only reviewers:
+
+- the code reviewer evaluates correctness, regressions, compatibility, security, scope, and maintainability
+- the test reviewer evaluates whether tests and executed checks provide meaningful confidence in the changed behavior
+
+Reviewers cannot modify files or fix their own findings. Their conclusions are treated as evidence, validated against the repository, and combined into a cycle verdict. This separation reduces self-confirmation while preserving the primary agent's responsibility for integration and final reporting.
+
+## Why Readiness Is Separate
+
+Passing an implementation review does not automatically make a change ready for a pull request. Readiness is a broader delivery decision: the complete diff must be coherent, required verification must exist, unrelated files must be excluded, and compatibility, configuration, migration, rollout, or documentation effects must be understood.
+
+`/prepare-pr` therefore acts as a separate final quality gate. It evaluates the complete proposed change as a review unit and prepares accurate PR content, but does not modify code or create the PR.
+
+## The Human Checkpoint
+
+Human intervention is not a fallback for agent failure. It is an explicit part of the control system.
+
+At the end of each cycle, the human decides whether:
+
+- the result satisfies the original goal
+- reviewer findings are relevant and worth addressing
+- constraints or priorities need clarification
+- another implementation cycle is justified
+- the change is ready for final PR evaluation
+
+The agent carries prior findings and decisions into later cycles within the same session, so the human does not need to restate the full history. New notes refine the accumulated context; they do not discard it. This keeps iteration efficient while ensuring that authority over direction remains with the human.
 
 ## Core Workflow
 
