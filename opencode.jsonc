@@ -18,7 +18,6 @@
       "options": {
         "baseURL": "{env:CLIPROXY_API_URL}",
         "apiKey": "{env:CLIPROXY_API_KEY}",
-        "timeout": 120000,
         "chunkTimeout": 30000,
         "setCacheKey": true
       },
