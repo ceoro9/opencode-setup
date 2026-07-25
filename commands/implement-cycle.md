@@ -76,27 +76,41 @@ Stop after presenting the implementation and independent review. The user decide
 - run `/implement-cycle <additional notes>` to address the findings with new guidance
 - request a different direction
 
-## Output
+## Human Decision Package
 
-### Cycle Result
+Present one coherent report designed for human judgment. Lead with the current scope and combined readiness verdict, then explain the implementation and review evidence supporting it.
 
-- requested outcome
-- behavior implemented
-- files changed
-- key decisions
+### Scope
+
+- original requested outcome
+- scope implemented in this cycle
+- acceptance criteria addressed
+- explicit exclusions, deferred work, and constraints preserved
+- any difference between requested and delivered scope
+
+### Implementation
+
+- behavior implemented or changed
+- files and components affected
+- key implementation decisions and why they were necessary
+- relevant failure paths and edge cases handled
 
 ### Verification
 
 - commands and checks run
 - results
-- unverified behavior or pre-existing failures
+- behavior directly verified
+- unverified behavior, unavailable environments, or pre-existing failures
 
-### Independent Review
+### Independent Readiness Review
 
-- verdict: `ready`, `refinement recommended`, or `refinement required`
-- validated code-review findings
-- validated test-review findings
+- combined verdict: `ready`, `refinement recommended`, or `refinement required`
+- code review readiness assessment and recommendation
+- test review readiness assessment and recommendation
+- validated findings grouped into one coherent explanation of what prevents or supports acceptance
 - rejected reviewer findings and why, when relevant
+
+Do not merely concatenate reviewer outputs. Reconcile overlap, disagreement, and severity into a concise assessment that lets the human understand whether the current solution satisfies the requested goal and what remains to be done.
 
 After validating reviewer findings, normalize each review outcome from the findings that remain valid. Rejected findings must not affect the combined verdict.
 
@@ -107,6 +121,17 @@ Determine the combined verdict using these rules:
 - `ready` only when no validated material finding remains and no material verification gap prevents confidence.
 
 If normalization changes a reviewer's original verdict, state the original verdict, normalized outcome, and reason.
+
+### Human Decision
+
+End with the available choices and the evidence behind them:
+
+- **Accept current solution** — use only when the combined verdict is `ready`.
+- **Run another cycle** — state the exact refinement objective and why it matters.
+- **Clarify direction** — identify the product, scope, architecture, or risk decision needed from the human.
+- **Require external verification** — identify manual, environment-specific, or operational evidence still needed.
+
+Do not make the decision on the human's behalf.
 
 ### Next-Cycle Refinement Brief
 
@@ -128,5 +153,6 @@ State `No additional implementation cycle is required.` only when the combined v
 
 - Keep implementation and review responsibilities separate.
 - Do not ask reviewers to approve their own work.
+- Ensure the final report clearly distinguishes requested scope, implemented scope, review evidence, and the decision still owned by the human.
 - Do not expand scope based on non-blocking reviewer suggestions.
 - Do not commit, push, create a PR, deploy, or modify remote systems unless explicitly requested.

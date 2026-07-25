@@ -48,7 +48,7 @@ This setup delegates the completed change to separate, read-only reviewers:
 - the code reviewer evaluates correctness, regressions, compatibility, security, scope, and maintainability
 - the test reviewer evaluates whether tests and executed checks provide meaningful confidence in the changed behavior
 
-Reviewers cannot modify files or fix their own findings. Their conclusions are treated as evidence, validated against the repository, and combined into a cycle verdict. This separation reduces self-confirmation while preserving the primary agent's responsibility for integration and final reporting.
+Reviewers cannot modify files or fix their own findings. Each reviewer must evaluate the readiness of the current solution, explain what supports or prevents acceptance, and provide a coherent recommendation for human judgment. Their conclusions are treated as evidence, validated against the repository, reconciled where they overlap or disagree, and combined into a cycle verdict. The primary agent must synthesize this evidence rather than merely concatenate reviewer output. This separation reduces self-confirmation while preserving the primary agent's responsibility for integration and final reporting.
 
 ## Why Readiness Is Separate
 
@@ -60,10 +60,12 @@ Passing an implementation review does not automatically make a change ready for 
 
 Human intervention is not a fallback for agent failure. It is an explicit part of the control system.
 
-At the end of each cycle, the human decides whether:
+At the end of each cycle, the human receives the requested scope, delivered implementation, verification evidence, and an independent readiness assessment in one report. The human decides whether:
 
-- the result satisfies the original goal
+- the delivered scope still matches the original goal
+- the implementation satisfies the intended behavior
 - reviewer findings are relevant and worth addressing
+- remaining verification gaps are acceptable
 - constraints or priorities need clarification
 - another implementation cycle is justified
 - the change is ready for final PR evaluation
@@ -106,14 +108,23 @@ During one cycle, the primary agent:
 6. Delegates the final diff to independent code and test reviewers.
 7. Validates their findings and presents the result without applying review feedback.
 
-The cycle then stops. The human decides the next action:
+The cycle then stops and presents a human decision package containing:
+
+- **Scope** — the original outcome, what this cycle covered, acceptance criteria addressed, exclusions, and preserved constraints.
+- **Implementation** — behavior changed, affected components, important decisions, and handled failure paths.
+- **Verification** — checks performed, results, directly verified behavior, and remaining evidence gaps.
+- **Independent readiness review** — a coherent assessment combining code and test review, validated findings, and the reasons the solution is or is not ready.
+- **Decision options** — accept the solution, run another cycle, clarify direction, or obtain external verification.
+
+The human then decides the next action:
 
 - **Ready:** run `/prepare-pr`.
 - **Refinement needed:** run `/implement-cycle` again. Prior findings are carried forward automatically.
 - **Refinement with guidance:** run `/implement-cycle <additional notes>`.
 - **Direction is wrong:** provide new constraints or use `/deep-reason` before another cycle.
+- **Evidence is incomplete:** perform the identified manual, environment-specific, or operational verification.
 
-The review boundary is intentional: the implementation agent does not silently fix reviewer findings. Each cycle produces one inspectable implementation iteration and one explicit decision point.
+The review boundary is intentional: the implementation agent does not silently fix reviewer findings. Each cycle produces one inspectable implementation iteration, a readiness assessment, and one explicit human decision point.
 
 ## Iterating Across Cycles
 
