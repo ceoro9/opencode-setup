@@ -35,6 +35,10 @@ flowchart TD
     Plan --> Cycle
 
     Cycle --> Decision{Human decision}
+    Decision -- Refactor --> Refactor["/refactor-cycle"]
+    Refactor --> RefactorDecision{Human decision}
+    RefactorDecision -- Refine --> Refactor
+    RefactorDecision -- Resume implementation --> Cycle
     Decision -- Refine --> Cycle
     Decision -- Add guidance --> Notes["/implement-cycle &lt;notes&gt;"]
     Notes --> Cycle
@@ -61,6 +65,7 @@ The main path is `/deep-reason` → human selection → `/deep-plan` → `/imple
 - `/deep-plan` keeps only the selected solution and produces a concise, codebase-aligned plan: goal, scope, approach, 4–8 tasks, proportional verification, and genuine blockers.
 - The plan supersedes rejected alternatives as implementation context. `/implement-cycle` revalidates repository details but does not reopen the selected solution unless it proves infeasible or unsafe.
 - Each `/implement-cycle` completes exactly one implementation and independent-review iteration, then stops for human judgment.
+- `/refactor-cycle` delegates a behavior-preserving cleanup pass to an isolated refactoring agent. The agent receives no task or cycle context and works only from local code, tests, and conventions, focusing on simplicity, style, consistency, and elegance.
 
 ## Cycle Result
 
@@ -90,6 +95,7 @@ Review findings are never applied automatically; the human decides whether anoth
 | `/deep-reason` | Compare solutions and support a human technical decision. |
 | `/deep-plan` | Convert the selected solution into a focused execution plan. |
 | `/implement-cycle` | Complete one implementation, verification, and independent-review cycle. |
+| `/refactor-cycle` | Delegate an isolated behavior-preserving refactor focused on code simplicity and elegance. |
 | `/implement-fast` | Implement a small, clear, low-risk change directly. |
 | `/implement` | Implement and verify without independent reviewers. |
 | `/fix` | Diagnose and fix a bug with regression verification. |
@@ -104,9 +110,10 @@ Review findings are never applied automatically; the human decides whether anoth
 | `code-architect-fast` | High-level reasoning and concise execution planning. |
 | `code-review-intermediate` | Fast, advisory sanity review for implementation cycles and `/review`; never authorizes PR creation. |
 | `test-reviewer` | Independent test and verification review during implementation cycles. |
+| `refactor` | Isolated behavior-preserving refactoring for simplicity, style, consistency, and elegance. |
 | `code-review-final` | Final complete-change readiness gate and PR content; its validated `ready` verdict is required for PR creation. |
 
-Specialized agents use default-deny, read-only permissions. Reviewers never fix their own findings. Intermediate verdicts guide cycle decisions; only the final reviewer gates PR creation.
+Specialized agents use default-deny permissions. Reviewers are read-only and never fix their own findings; the isolated `refactor` agent may make only behavior-preserving local cleanup changes. Intermediate verdicts guide cycle decisions; only the final reviewer gates PR creation.
 
 ## Boundaries
 
