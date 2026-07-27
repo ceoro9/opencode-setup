@@ -33,12 +33,11 @@ Use the following when supplied:
 - original task and intended behavior
 - acceptance criteria and constraints
 - prior test findings and user decisions
-- review baseline or task-specific patch
-- changed production and test files
-- verification commands and exact results
+- the cycle-specific patch: production and test changes introduced in the current cycle only
+- verification commands and exact results scoped to this cycle
 - known limitations and unverified behavior
 
-If needed, inspect the relevant implementation, tests, and existing testing conventions. Do not modify files or run commands that may alter the workspace.
+Evaluate coverage only for behavior changed by the current cycle's patch. If needed, inspect the relevant implementation, tests, and existing testing conventions to understand that behavior, not to audit pre-existing test coverage unrelated to this cycle's changes. Do not modify files or run commands that may alter the workspace.
 
 ## Review Scope
 
@@ -53,7 +52,7 @@ Evaluate:
 - consistency with the project's testing strategy
 - whether runtime, integration, or manual verification is needed beyond automated tests
 
-Assess changed behavior, not raw coverage percentage. Do not require tests for trivial mappings, generated code, or behavior already covered adequately at a better layer.
+Assess behavior changed by the current cycle, not raw coverage percentage or pre-existing coverage gaps outside this cycle's scope. Do not require tests for trivial mappings, generated code, or behavior already covered adequately at a better layer.
 
 If implementation tracing reveals a likely production defect, label it clearly as an implementation finding instead of expanding into a duplicate code review.
 

@@ -61,13 +61,11 @@ Give each reviewer:
 - relevant prior-cycle findings and user decisions
 - additional user notes for the current cycle
 - the intended behavior and acceptance criteria
-- the initial workspace baseline
-- the cycle-specific patch or best available delta
-- files touched by this cycle and any pre-existing modifications within them
-- verification commands and results
+- the cycle-specific patch: the diff between the cycle baseline captured in Phase 1 step 2 and the current state, and nothing else
+- verification commands and results scoped to this cycle
 - relevant constraints and known limitations
 
-If cycle changes overlap pre-existing edits and cannot be separated reliably, disclose that limitation to both reviewers.
+Reviewers evaluate only the hunks contained in the cycle-specific patch. Surrounding or pre-existing code may be consulted solely to understand behavior and established patterns, never as independent review material. If pre-existing uncommitted edits overlap the same files and cannot be separated cleanly, exclude them from the patch given to reviewers and disclose the overlapping files and the separation limitation instead of supplying the combined diff.
 
 Reviewers must not modify files. Require their structured verdict and findings, preserve reviewer attribution, and validate each finding against the code before reporting it.
 

@@ -38,7 +38,7 @@ Use the following when supplied:
 - verification commands and results
 - known limitations or unverified behavior
 
-Use surrounding code only to confirm behavior and established patterns. Do not audit unrelated legacy code or redesign the solution.
+Review only the lines and hunks contained in the supplied cycle-specific patch. Use surrounding or pre-existing code only to confirm behavior and established patterns, never as independent review material. Do not raise findings about pre-existing code, prior-cycle work, or files outside the patch unless the current patch's correctness directly depends on them. Do not audit unrelated legacy code or redesign the solution.
 
 ## Review Scope
 
@@ -55,7 +55,7 @@ Keep the review proportional to one implementation cycle. The test reviewer owns
 
 ## Finding Standard
 
-Report only high-confidence, actionable findings introduced or exposed by the change.
+Report only high-confidence, actionable findings introduced or exposed by the current cycle's patch.
 
 Severity:
 
