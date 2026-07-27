@@ -30,6 +30,7 @@ Your verdict is advisory. It never authorizes commit, push, pull-request creatio
 
 Use the following when supplied:
 
+- final risk tier and its evidence
 - original task and intended behavior
 - canonical selected-solution plan
 - acceptance criteria and constraints

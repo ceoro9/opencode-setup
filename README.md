@@ -64,7 +64,7 @@ The main path is `/deep-reason` → human selection → `/deep-plan` → `/imple
 - `/deep-reason` stays high-level: decision, material constraints, realistic options, trade-offs, recommendation, and human choice. It does not plan execution.
 - `/deep-plan` keeps only the selected solution and produces a concise, codebase-aligned plan: goal, scope, approach, 4–8 tasks, proportional verification, and genuine blockers.
 - The plan supersedes rejected alternatives as implementation context. `/implement-cycle` revalidates repository details but does not reopen the selected solution unless it proves infeasible or unsafe.
-- Each `/implement-cycle` completes exactly one implementation and independent-review iteration, then stops for human judgment.
+- Each `/implement-cycle` completes exactly one implementation and risk-proportionate review iteration, then stops for human judgment. Low-risk patches receive focused verification and diff inspection; medium-risk patches receive code review; high-risk patches receive concurrent code and test review.
 - `/refactor-cycle` delegates a behavior-preserving cleanup pass to an isolated refactoring agent. The agent receives no task or cycle context and works only from local code, tests, and conventions, focusing on simplicity, style, consistency, and elegance.
 
 ## Cycle Result
@@ -74,10 +74,10 @@ Every cycle presents one human decision package:
 - **Scope** — requested and delivered scope, exclusions, and preserved constraints.
 - **Implementation** — changed behavior, affected components, and key decisions.
 - **Verification** — checks, results, and evidence gaps.
-- **Intermediate review** — synthesized cycle-level code/test findings and advisory verdict.
+- **Risk tier and review** — stated low/medium/high classification, review path, synthesized findings, and advisory verdict.
 - **Next action** — accept, refine, clarify direction, or obtain external verification.
 
-Intermediate reviews inside `/implement-cycle` are isolated sanity checks for human evaluation; they never authorize PR creation. When the human accepts the cycle result, invoking `/prepare-pr` conditionally authorizes the delivery workflow. It delegates the complete change to `code-review-final`, and only that validated final `ready` verdict opens the gate to validate or create a dedicated branch, commit remaining intended changes, push to a verified destination, create the pull request, and return its URL for manual review. A failing final verdict creates no Git or remote changes and sends the work back to another cycle.
+`/implement-cycle` selects review depth from the completed patch: low-risk changes use focused verification and diff inspection, medium-risk changes add isolated code review, and high-risk changes add concurrent code and test review. These reviews are advisory and never authorize PR creation. When the human accepts the cycle result, invoking `/prepare-pr` conditionally authorizes the delivery workflow. It delegates the complete change to `code-review-final`, and only that validated final `ready` verdict opens the gate to validate or create a dedicated branch, commit remaining intended changes, push to a verified destination, create the pull request, and return its URL for manual review. A failing final verdict creates no Git or remote changes and sends the work back to another cycle.
 
 If another cycle is needed, prior plans, accepted findings, decisions, and unresolved work carry forward automatically in the same session:
 

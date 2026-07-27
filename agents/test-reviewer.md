@@ -30,6 +30,7 @@ Your output is part of a human decision package. Explain the overall confidence 
 
 Use the following when supplied:
 
+- final risk tier and its evidence
 - original task and intended behavior
 - acceptance criteria and constraints
 - prior test findings and user decisions

@@ -29,9 +29,19 @@ $ARGUMENTS
 The cycle has two separate phases:
 
 1. Implementation by the primary agent.
-2. Independent review by read-only sub-agents.
+2. Risk-proportionate independent review when required by the completed patch.
 
 Complete exactly one cycle. Do not automatically begin another implementation cycle after review.
+
+## Risk Tier
+
+Classify the planned change as `low`, `medium`, or `high` before editing. Reassess from the completed cycle-specific patch before review. Escalate when evidence warrants it; do not de-escalate after editing merely to skip review.
+
+- `low` — a small, local, readily reversible internal change with a focused automated check; no public API, configuration, persistence, authorization, security, concurrency, dependency, infrastructure, or cross-component effect. Run primary-agent verification and final diff inspection only.
+- `medium` — the default for any change not clearly low risk. Run `code-review-intermediate`.
+- `high` — any change affecting public APIs, authentication or authorization, security or privacy, payments, data integrity or persistence, configuration, dependencies, concurrency, infrastructure, migrations, error handling across a boundary, or multiple components. Run `code-review-intermediate` and `test-reviewer` concurrently.
+
+When uncertainty prevents confident low-risk classification, use `medium`. A user may require a higher tier but may not lower one. State the final tier and the concrete evidence for it in the result.
 
 ## Phase 1: Implement and Verify
 
@@ -47,15 +57,17 @@ Complete exactly one cycle. Do not automatically begin another implementation cy
 
 Ask the user before implementation only when missing information materially changes behavior, compatibility, architecture, security, or risk.
 
-## Phase 2: Independent Review
+## Phase 2: Risk-Proportionate Independent Review
 
-After implementation and verification are complete, delegate review concurrently when possible:
+After implementation and verification, reassess the tier from the completed cycle-specific patch:
 
-- `code-review-intermediate`: perform a focused cycle-level sanity review for correctness, regressions, scope, compatibility, security, and maintainability. Its verdict is advisory and cannot authorize PR creation.
-- `test-reviewer`: review the changed behavior and tests for meaningful coverage, correctness, failure paths, and maintainability.
+- `low`: do not delegate reviewers. Confirm the focused automated check passed, inspect the cycle-specific patch, and state why the tier remains low.
+- `medium`: delegate `code-review-intermediate`.
+- `high`: delegate `code-review-intermediate` and `test-reviewer` concurrently.
 
-Give each reviewer:
+For every delegated reviewer, provide:
 
+- the final risk tier and its evidence
 - the original task
 - the canonical selected-solution `/deep-plan` handoff when available; do not supply the full alternatives analysis
 - relevant prior-cycle findings and user decisions
@@ -106,11 +118,12 @@ Present one coherent report designed for human judgment. Lead with the current s
 - behavior directly verified
 - unverified behavior, unavailable environments, or pre-existing failures
 
-### Independent Readiness Review
+### Risk Tier and Independent Readiness Review
 
+- final tier and the evidence supporting it
+- review path used: primary-agent verification only, code review, or code and test review
 - combined verdict: `ready`, `refinement recommended`, or `refinement required`
-- code review readiness assessment and recommendation
-- test review readiness assessment and recommendation
+- each review performed and its readiness assessment; explicitly state when code or test review was not required by the tier
 - validated findings grouped into one coherent explanation of what prevents or supports acceptance
 - rejected reviewer findings and why, when relevant
 
