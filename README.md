@@ -97,6 +97,23 @@ Run `npm run skills:reconcile` to install or update every declared external skil
 
 Use the upstream `skills` CLI to add an external skill at a commit, then copy its resulting version-1 lock entry into this repository lock. The reconciliation command supports GitHub, GitLab, and generic Git remote entries, and never targets OpenCode's `~/.config/opencode/skills/` directory.
 
+## Machine-local MCPs
+
+OpenCode loads `~/.config/opencode-mcps/*.json` and `*.jsonc` at startup. Set `OPENCODE_MCP_DIR` to use another directory. Each file must contain an `mcp` object in the standard OpenCode configuration shape; machine-local entries override MCPs with the same name from this repository.
+
+```jsonc
+{
+  "mcp": {
+    "playwright": {
+      "type": "local",
+      "command": ["npx", "-y", "@playwright/mcp"]
+    }
+  }
+}
+```
+
+The directory is optional and remains outside this shared configuration repository. Quit and restart OpenCode after changing these files.
+
 ## Commands
 
 | Command | Purpose |

@@ -41,6 +41,10 @@
   "model": "cliproxy/general",
   "small_model": "cliproxy/fast",
 
+  "plugin": [
+    "./plugins/load-external-mcps.mjs"
+  ],
+
   "watcher": {
     "ignore": [
       "node_modules/**",
@@ -52,19 +56,5 @@
       "cdk.out/**",
       "*.log"
     ]
-  },
-
-  "mcp": {
-    "github": {
-      "type": "local",
-      "command": [
-        "npx",
-        "-y",
-        "@modelcontextprotocol/server-github"
-      ],
-      "environment": {
-        "GITHUB_PERSONAL_ACCESS_TOKEN": "{env:GITHUB_PERSONAL_ACCESS_TOKEN}"
-      }
-    }
   }
 }
