@@ -1,21 +1,22 @@
 ---
-description: Review current changes for correctness, regressions, scope, and maintainability without editing code.
+description: Quickly review the current diff without editing code or exploring the repository.
 agent: code-review-intermediate
-model: cliproxy/smart
+model: cliproxy/fast
 subtask: true
 ---
 
-Review the current implementation. Use this additional context when provided:
+Perform a fast patch-only review using the supplied context and diff.
+
+Additional context:
 
 $ARGUMENTS
 
-Rules:
+Current unstaged diff:
 
-- Do not modify files.
-- Inspect the current diff and relevant surrounding code.
-- Focus findings on changes introduced by the current work.
-- Check correctness, failure paths, regressions, compatibility, security, unnecessary complexity, project consistency, and missing tests.
-- Report only actionable, evidence-based findings.
-- Do not raise style preferences or unrelated legacy issues.
+!`git diff --no-ext-diff`
 
-Order findings by severity and include file and line references. If no material issues are found, state that explicitly and note any verification gaps.
+Current staged diff:
+
+!`git diff --cached --no-ext-diff`
+
+Check only for obvious correctness problems, required behavior missing from the patch, scope drift, and material verification gaps. Do not inspect the repository or broaden the review beyond the supplied diffs.
