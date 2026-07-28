@@ -89,6 +89,14 @@ If another cycle is needed, the latest compact checkpoint carries forward the un
 
 Review findings are never applied automatically; the human decides whether another cycle is justified.
 
+## External skills
+
+Repository-owned skills in [`skills/`](skills/) continue to be loaded directly by OpenCode. External skills are declared only in [`skills-lock.json`](skills-lock.json) and are installed outside this repository.
+
+Run `npm run skills:reconcile` to install or update every declared external skill in `~/.agents/skills/`, which OpenCode discovers automatically. The command is additive: skills not declared in the lock are never removed.
+
+Use the upstream `skills` CLI to add an external skill at a commit, then copy its resulting version-1 lock entry into this repository lock. The reconciliation command supports GitHub, GitLab, and generic Git remote entries, and never targets OpenCode's `~/.config/opencode/skills/` directory.
+
 ## Commands
 
 | Command | Purpose |

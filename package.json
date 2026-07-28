@@ -1,5 +1,12 @@
 {
+  "private": true,
+  "scripts": {
+    "postinstall": "npm run skills:reconcile",
+    "skills:reconcile": "node scripts/reconcile-skills.mjs",
+    "test": "node --test tests/*.test.mjs"
+  },
   "dependencies": {
-    "@opencode-ai/plugin": "1.17.9"
+    "@opencode-ai/plugin": "1.17.9",
+    "skills": "^1.5.20"
   }
 }
