@@ -42,7 +42,8 @@
   "small_model": "cliproxy/fast",
 
   "plugin": [
-    "./plugins/load-external-mcps.mjs"
+    "./plugins/load-external-mcps.mjs",
+    "./plugins/agent-env.mjs"
   ],
 
   "watcher": {
