@@ -40,6 +40,7 @@
 
   "model": "cliproxy/general",
   "small_model": "cliproxy/fast",
+  "default_agent": "facilitator",
 
   "plugin": [
     "./plugins/load-external-mcps.mjs",

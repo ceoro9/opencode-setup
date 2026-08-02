@@ -5,7 +5,7 @@ description: Use when delegating implementation, research, verification, or revi
 
 # AgentENV Worker Delegation
 
-Use `list_workers` and `spawn_worker` to manage isolated OpenCode workers. The main agent is the worker manager and facilitator: it inventories existing workers, plans capacity, chooses models, supplies names and tags, tracks IDs and lifecycle state, observes results, and decides what to accept. Workers perform repository work inside AgentENV; do not edit the host worktree as part of delegated work.
+The default `facilitator` primary agent owns the core worker-management loop. Use this skill for detailed `list_workers`, `spawn_worker`, `run_task`, `list_tasks`, and `get_task` contracts, metadata conventions, model routing, and benchmark procedures. Workers perform repository work inside AgentENV; the facilitator remains host read-only.
 
 ## Management Loop
 
@@ -39,8 +39,7 @@ Use `run_task` after selecting a running worker by `workerID`:
 {
   "workerID": "worker-id",
   "title": "Implement parser fix",
-  "task": "Inspect the parser failure, implement the smallest correct fix, add regression coverage, and run the relevant checks.",
-  "timeoutSeconds": 1800
+  "task": "Inspect the parser failure, implement the smallest correct fix, add regression coverage, and run the relevant checks."
 }
 ```
 
@@ -62,7 +61,7 @@ Use one worker for focused investigation or a single implementation. Use two or 
 
 ## Choosing Models
 
-The facilitator chooses every worker's model explicitly. Users decide which models are allowed and communicate that selection to the facilitator; never invent a model name.
+The facilitator chooses every worker's model explicitly from the configured `cliproxy` model IDs. User-specified model choices or restrictions override automatic routing; never invent an unconfigured model name.
 
 Choose models by work type:
 
@@ -116,7 +115,7 @@ Before calling `spawn_worker`:
 1. Call `list_workers` and verify that a suitable worker or duplicate cohort does not already exist.
 2. Confirm the host Git worktree is clean. The tool rejects dirty worktrees to guarantee a common baseline.
 3. Confirm the task is sufficiently bounded and workers will not overlap on mutable state.
-4. Select only user-authorized model IDs.
+4. Select only configured model IDs and honor any user-specified restrictions.
 5. Choose the worker agent deliberately; default `build` is for execution, not review-only work.
 6. Use descriptive names and tags so results can be identified later.
 

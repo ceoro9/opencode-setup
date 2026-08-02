@@ -2,7 +2,7 @@
 
 Personal opencode configuration for human-directed agentic software development.
 
-The setup separates solution selection, execution planning, implementation, independent review, and delivery readiness. Agents work autonomously within each stage; the human controls transitions to prevent goal drift and unapproved iteration.
+The setup separates solution selection, execution planning, implementation, independent review, and delivery readiness. The default `facilitator` treats persistent isolated AgentENV workers as first-class collaborators for long-running work; the human controls transitions to prevent goal drift and unapproved iteration.
 
 ## Philosophy
 
@@ -18,6 +18,14 @@ This workflow controls that risk through explicit boundaries:
 - **Evaluate delivery separately.** A technically correct implementation still passes a final PR-readiness gate for scope, evidence, and delivery concerns.
 
 The approach combines agent autonomy with proportional, evidence-based checkpoints. Agents retain enough freedom to complete cohesive work efficiently, while humans retain authority over intent, trade-offs, scope, review depth, and acceptance.
+
+## AgentENV facilitator
+
+Plain non-trivial prompts start with the read-only `facilitator` primary agent. It inventories persistent workers, selects models, submits self-contained tasks asynchronously, coordinates concurrent work, and retrieves results only at meaningful decision points. AgentENV workers each run an isolated OpenCode server with their own model configuration, workspace, sessions, and task history.
+
+The facilitator cannot edit the host worktree and treats worker output as attributed evidence. Current AgentENV support includes worker listing/spawning and asynchronous task submission/result retrieval; patch collection, host integration, pause/resume, deletion, and lease extension are not implemented yet.
+
+Commands that explicitly select `build`, including `/implement`, `/fix`, and `/implement-cycle`, remain local execution workflows. They are not redirected to AgentENV until safe patch collection and integration are available.
 
 ## Workflow
 
@@ -133,6 +141,7 @@ The directory is optional and remains outside this shared configuration reposito
 
 | Agent | Responsibility |
 | --- | --- |
+| `facilitator` | Default host-read-only primary agent; manages persistent AgentENV workers, concurrent tasks, model routing, and result assessment. |
 | `code-architect-fast` | High-level reasoning and concise execution planning. |
 | `code-review-intermediate` | Optional tool-free patch drift check for implementation cycles and `/review`. |
 | `test-reviewer` | Optional tool-free test evidence check; not used during implementation cycles. |
