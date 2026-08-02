@@ -68,7 +68,9 @@ function modelKey(model) {
   return `${model.providerID}/${model.modelID}`;
 }
 
-function networkFor(cliproxyUrl) {
+function networkFor(cliproxyUrl, restrictEgress) {
+  if (!restrictEgress) return { allowPublicTraffic: true };
+
   const { hostname } = new URL(cliproxyUrl);
   return {
     allowPublicTraffic: false,
@@ -129,6 +131,7 @@ export default async (_input, options = {}) => {
   const workerTemplate = options.workerTemplate ?? process.env.AGENTENV_WORKER_TEMPLATE;
   const cliproxyUrl = options.cliproxyUrl ?? process.env.CLIPROXY_API_URL;
   const cliproxyApiKey = options.cliproxyApiKey ?? process.env.CLIPROXY_API_KEY;
+  const restrictEgress = options.restrictEgress ?? process.env.AGENTENV_RESTRICT_EGRESS === "true";
   const providerID = options.providerID ?? "cliproxy";
 
   return {
@@ -173,7 +176,7 @@ export default async (_input, options = {}) => {
                 timeout: leaseSeconds,
                 autoPause: false,
                 secure: true,
-                network: networkFor(proxyUrl),
+                network: networkFor(proxyUrl, restrictEgress),
                 metadata: {
                   ...args.metadata,
                   ...model.metadata,

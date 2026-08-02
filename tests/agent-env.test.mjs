@@ -99,9 +99,7 @@ test("spawn_worker creates one isolated worker per explicitly selected model", a
       assert.equal(request.autoPause, false);
       assert.equal(request.secure, true);
       assert.equal(request.timeout, 3600);
-      assert.equal(request.network.allowPublicTraffic, false);
-      assert.deepEqual(request.network.allowOut, ["cliproxy.test"]);
-      assert.deepEqual(request.network.denyOut, ["0.0.0.0/0"]);
+      assert.deepEqual(request.network, { allowPublicTraffic: true });
       assert.equal(request.envVars.OPENCODE_SERVER_PASSWORD.length > 0, true);
       assert.equal(request.envVars.OPENCODE_WORKER_AGENT, "build");
       assert.equal(config.provider.cliproxy.options.baseURL, "https://cliproxy.test/v1");
