@@ -31,6 +31,27 @@ Call without arguments for all plugin-managed workers, or filter by `states`, `c
 
 The result includes worker and sandbox IDs, name, model, user metadata, cohort, baseline commit, template, state, expiration, and resources. It excludes unmanaged AgentENV sandboxes and internal metadata keys.
 
+## `run_task` Contract
+
+Use `run_task` after selecting a running worker by `workerID`:
+
+```json
+{
+  "workerID": "worker-id",
+  "title": "Implement parser fix",
+  "task": "Inspect the parser failure, implement the smallest correct fix, add regression coverage, and run the relevant checks.",
+  "timeoutSeconds": 1800
+}
+```
+
+The plugin reuses the worker's assigned model and agent; do not pass or change them during task execution. It creates a dedicated remote OpenCode session, submits asynchronously, and immediately returns a durable `taskID` plus `sessionID`.
+
+Give each worker a complete, bounded task brief containing the objective, acceptance criteria, constraints, expected artifacts, and verification. Workers do not inherit the facilitator's conversation context. For benchmarks, send byte-identical task text to every candidate worker.
+
+Use `list_tasks` to monitor multiple submitted tasks without waiting. Use `get_task` with a `taskID` when a result is needed. A task may be `submitting`, `submitted`, `running`, `completed`, or `failed`. Do useful coordination work while tasks run; do not repeatedly poll without a reason.
+
+After completion, assess the returned text as worker-reported evidence. Preserve `taskID` and `sessionID`; do not claim implementation correctness until patch collection and independent verification exist.
+
 ## When to Spawn Workers
 
 Spawn a worker when the work is independent, needs isolated execution, benefits from a second implementation or review, or is explicitly a model comparison.
@@ -124,4 +145,4 @@ Do not mention competing models in the task prompt. Compare only after each work
 
 ## Current Limit
 
-Worker listing and creation are available now. Pause, resume, timeout extension, deletion, `run_task`, and `collect_patch` are not implemented yet. The facilitator must still track expiration and report when a required lifecycle action cannot yet be performed. After spawning, list the workers and report returned worker IDs and states; do not claim they performed work until task execution support exists.
+Worker listing, creation, asynchronous task submission, and task result retrieval are available now. Pause, resume, timeout extension, deletion, and `collect_patch` are not implemented yet. The facilitator must track workers and task IDs, inspect task status at decision points, and report material completion, failure, or blockers to the human. Worker results are reports, not trusted host-side patches or verification results.

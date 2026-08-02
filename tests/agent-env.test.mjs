@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile as execFileCallback } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
@@ -36,14 +36,18 @@ function context(directory) {
   };
 }
 
-async function loadPlugin(fetch) {
+async function loadPlugin(fetch, options = {}) {
   return (await import(`${pluginPath}?test=${crypto.randomUUID()}`)).default({}, {
     agentenvUrl: "http://agentenv.test",
     agentenvApiKey: "agentenv-test-key",
     workerTemplate: "opencode-worker",
     cliproxyUrl: "https://cliproxy.test/v1",
     cliproxyApiKey: "cliproxy-test-key",
+    credentialStore: join(tmpdir(), `opencode-agentenv-credentials-${crypto.randomUUID()}.json`),
+    bootstrapWorker: async () => undefined,
+    waitForWorkerHealth: async () => ({ healthy: true, version: "1.18.11" }),
     fetch,
+    ...options,
   });
 }
 
@@ -135,8 +139,169 @@ test("list_workers filters workers by metadata without requiring a Git baseline"
   }
 });
 
+test("run_task submits work asynchronously and get_task retrieves the result", async () => {
+  const directory = await worktree();
+  const credentialStore = join(tmpdir(), `opencode-agentenv-run-task-${crypto.randomUUID()}.json`);
+  const requests = [];
+
+  try {
+    await writeFile(credentialStore, JSON.stringify({
+      version: 1,
+      workers: {
+        "worker-1": {
+          workerID: "worker-1",
+          sandboxID: "sandbox-1",
+          serverPassword: "worker-secret",
+          workerAgent: "build",
+          model: { providerID: "cliproxy", modelID: "deep" },
+        },
+      },
+    }));
+    const hooks = await loadPlugin(async (url, init = {}) => {
+      requests.push({ url: String(url), init });
+
+      if (String(url) === "http://agentenv.test/v2/sandboxes") {
+        return new Response(JSON.stringify([{
+          sandboxID: "sandbox-1",
+          alias: "opencode-worker-v2",
+          state: "running",
+          metadata: {
+            opencodeAgentenvWorker: "worker-1",
+            opencodeAgentenvName: "implementation-deep",
+            opencodeAgentenvModel: "cliproxy/deep",
+          },
+        }]), { status: 200 });
+      }
+      if (String(url).endsWith("/global/health")) {
+        return new Response(JSON.stringify({ healthy: true, version: "1.18.11" }), { status: 200 });
+      }
+      if (String(url).endsWith("/session")) {
+        return new Response(JSON.stringify({ id: "session-1" }), { status: 200 });
+      }
+      if (String(url).endsWith("/session/session-1/prompt_async")) {
+        return new Response(null, { status: 204 });
+      }
+      if (String(url).endsWith("/session/status")) {
+        return new Response(JSON.stringify({}), { status: 200 });
+      }
+      if (String(url).endsWith("/session/session-1/message")) {
+        return new Response(JSON.stringify([{
+          info: { id: "message-1", role: "assistant", providerID: "cliproxy", modelID: "deep", agent: "build", time: { completed: 123 } },
+          parts: [
+            { type: "text", text: "Task " },
+            { type: "tool", state: { status: "completed" } },
+            { type: "text", text: "complete" },
+          ],
+        }]), { status: 200 });
+      }
+      throw new Error(`Unexpected request ${String(url)}`);
+    }, { credentialStore });
+    const result = await hooks.tool.run_task.execute({
+      workerID: "worker-1",
+      task: "Implement the requested change",
+      title: "Implementation task",
+    }, context(directory));
+    const submitted = JSON.parse(result.output);
+    const promptRequest = requests.find(({ url }) => url.endsWith("/session/session-1/prompt_async"));
+    const prompt = JSON.parse(promptRequest.init.body);
+
+    assert.equal(submitted.workerID, "worker-1");
+    assert.equal(submitted.sessionID, "session-1");
+    assert.equal(submitted.status, "submitted");
+    assert.ok(submitted.taskID);
+    assert.deepEqual(prompt.model, { providerID: "cliproxy", modelID: "deep" });
+    assert.equal(prompt.agent, "build");
+    assert.equal(prompt.parts[0].text, "Implement the requested change");
+    assert.equal(promptRequest.init.headers["x-agentenv-sandbox-id"], "sandbox-1");
+    assert.equal(promptRequest.init.headers["x-agentenv-target-port"], "4096");
+    assert.equal(promptRequest.init.headers.Authorization, `Basic ${Buffer.from("opencode:worker-secret").toString("base64")}`);
+    assert.doesNotMatch(result.output, /worker-secret|Task complete/);
+
+    const taskResult = await hooks.tool.get_task.execute({ taskID: submitted.taskID }, context(directory));
+    const completed = JSON.parse(taskResult.output);
+    assert.equal(completed.status, "completed");
+    assert.equal(completed.text, "Task complete");
+    assert.equal(completed.completedAt, 123);
+
+    const taskList = await hooks.tool.list_tasks.execute({ statuses: ["completed"] }, context(directory));
+    const listed = JSON.parse(taskList.output);
+    assert.deepEqual(listed.tasks.map((task) => task.taskID), [submitted.taskID]);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+    await rm(credentialStore, { force: true });
+  }
+});
+
+test("run_task durably records a failed asynchronous submission", async () => {
+  const directory = await worktree();
+  const credentialStore = join(tmpdir(), `opencode-agentenv-failed-submit-${crypto.randomUUID()}.json`);
+
+  try {
+    await writeFile(credentialStore, JSON.stringify({
+      version: 1,
+      workers: {
+        "worker-1": {
+          workerID: "worker-1",
+          sandboxID: "sandbox-1",
+          serverPassword: "worker-secret",
+          workerAgent: "build",
+          model: { providerID: "cliproxy", modelID: "deep" },
+        },
+      },
+      tasks: {},
+    }));
+    const hooks = await loadPlugin(async (url) => {
+      if (String(url) === "http://agentenv.test/v2/sandboxes") {
+        return new Response(JSON.stringify([{
+          sandboxID: "sandbox-1",
+          state: "running",
+          metadata: { opencodeAgentenvWorker: "worker-1", opencodeAgentenvName: "worker", opencodeAgentenvModel: "cliproxy/deep" },
+        }]), { status: 200 });
+      }
+      if (String(url).endsWith("/global/health")) return new Response(JSON.stringify({ healthy: true }), { status: 200 });
+      if (String(url).endsWith("/session")) return new Response(JSON.stringify({ id: "session-1" }), { status: 200 });
+      if (String(url).endsWith("/prompt_async")) return new Response("failed", { status: 503 });
+      throw new Error(`Unexpected request ${String(url)}`);
+    }, { credentialStore });
+
+    await assert.rejects(
+      hooks.tool.run_task.execute({ workerID: "worker-1", task: "test" }, context(directory)),
+      /HTTP 503/,
+    );
+    const state = JSON.parse(await readFile(credentialStore, "utf8"));
+    const tasks = Object.values(state.tasks);
+    assert.equal(tasks.length, 1);
+    assert.equal(tasks[0].status, "failed");
+    assert.equal(tasks[0].sessionID, "session-1");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+    await rm(credentialStore, { force: true });
+    await rm(`${credentialStore}.lock`, { force: true });
+  }
+});
+
+test("run_task rejects workers without a matching local credential", async () => {
+  const directory = await worktree();
+
+  try {
+    const hooks = await loadPlugin(async () => new Response(JSON.stringify([{
+      sandboxID: "sandbox-1",
+      state: "running",
+      metadata: { opencodeAgentenvWorker: "worker-1" },
+    }]), { status: 200 }));
+
+    await assert.rejects(
+      hooks.tool.run_task.execute({ workerID: "worker-1", task: "test" }, context(directory)),
+      /no matching local credential/,
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("spawn_worker creates one isolated worker per explicitly selected model", async () => {
   const directory = await worktree();
+  const credentialStore = join(tmpdir(), `opencode-agentenv-spawn-${crypto.randomUUID()}.json`);
   const calls = [];
 
   try {
@@ -149,7 +314,7 @@ test("spawn_worker creates one isolated worker per explicitly selected model", a
       }
 
       return new Response(JSON.stringify({ templateID: "opencode-worker" }), { status: 200 });
-    });
+    }, { credentialStore });
     const tool = hooks.tool.spawn_worker;
     const toolContext = context(directory);
     const result = await tool.execute({
@@ -197,8 +362,44 @@ test("spawn_worker creates one isolated worker per explicitly selected model", a
     }
 
     assert.doesNotMatch(result.output, /cliproxy-test-key|agentenv-test-key/);
+    const credentials = JSON.parse(await readFile(credentialStore, "utf8"));
+    const credentialEntries = Object.values(credentials.workers);
+    assert.equal(credentialEntries.length, 2);
+    assert.deepEqual(credentialEntries.map((entry) => entry.model.modelID).sort(), ["model-a", "model-b"]);
+    assert.ok(credentialEntries.every((entry) => entry.serverPassword));
+    assert.equal((await stat(credentialStore)).mode & 0o777, 0o600);
   } finally {
     await rm(directory, { recursive: true, force: true });
+    await rm(credentialStore, { force: true });
+  }
+});
+
+test("concurrent spawn_worker calls preserve every worker credential", async () => {
+  const directory = await worktree();
+  const credentialStore = join(tmpdir(), `opencode-agentenv-concurrent-${crypto.randomUUID()}.json`);
+
+  try {
+    const fetch = async (_url, init = {}) => {
+      if (init.method !== "POST") return new Response("{}", { status: 200 });
+      const body = JSON.parse(init.body);
+      return new Response(JSON.stringify({ sandboxID: `sandbox-${body.metadata.opencodeAgentenvWorker}` }), { status: 201 });
+    };
+    const [first, second] = await Promise.all([
+      loadPlugin(fetch, { credentialStore }),
+      loadPlugin(fetch, { credentialStore }),
+    ]);
+
+    await Promise.all([
+      first.tool.spawn_worker.execute({ models: [{ providerID: "cliproxy", modelID: "model-a" }] }, context(directory)),
+      second.tool.spawn_worker.execute({ models: [{ providerID: "cliproxy", modelID: "model-b" }] }, context(directory)),
+    ]);
+
+    const state = JSON.parse(await readFile(credentialStore, "utf8"));
+    assert.deepEqual(Object.values(state.workers).map((worker) => worker.model.modelID).sort(), ["model-a", "model-b"]);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+    await rm(credentialStore, { force: true });
+    await rm(`${credentialStore}.lock`, { force: true });
   }
 });
 
@@ -247,6 +448,32 @@ test("spawn_worker rejects dirty host worktrees", async () => {
     assert.equal(requests, 0);
   } finally {
     await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("spawn_worker reports failure when the injected-environment server bootstrap fails", async () => {
+  const directory = await worktree();
+  const credentialStore = join(tmpdir(), `opencode-agentenv-bootstrap-${crypto.randomUUID()}.json`);
+
+  try {
+    const hooks = await loadPlugin(async (_url, init = {}) => {
+      if (init.method === "POST") return new Response(JSON.stringify({ sandboxID: "sandbox-1" }), { status: 201 });
+      return new Response("{}", { status: 200 });
+    }, {
+      credentialStore,
+      bootstrapWorker: async () => { throw new Error("bootstrap failed"); },
+    });
+    const result = await hooks.tool.spawn_worker.execute({
+      models: [{ providerID: "cliproxy", modelID: "model-a" }],
+    }, context(directory));
+    const output = JSON.parse(result.output);
+
+    assert.equal(output.workers[0].status, "failed");
+    assert.equal(output.workers[0].error, "bootstrap failed");
+    await assert.rejects(readFile(credentialStore), /ENOENT/);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+    await rm(credentialStore, { force: true });
   }
 });
 
