@@ -5,6 +5,22 @@ import { parse } from "jsonc-parser";
 
 const directory = process.env.OPENCODE_MCP_DIR ?? join(homedir(), ".config", "opencode-setup", "mcps");
 
+const interpolateEnvironment = (value) => {
+  if (typeof value === "string") {
+    return value.replace(/\{env:([^}]+)\}/g, (placeholder, name) => process.env[name] ?? placeholder);
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(interpolateEnvironment);
+  }
+
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, interpolateEnvironment(item)]));
+  }
+
+  return value;
+};
+
 export default async () => ({
   config: async (config) => {
     const files = await readdir(directory).catch(() => []);
@@ -13,7 +29,7 @@ export default async () => ({
       const fragment = parse(await readFile(join(directory, file), "utf8"));
 
       if (fragment?.mcp && typeof fragment.mcp === "object" && !Array.isArray(fragment.mcp)) {
-        config.mcp = { ...config.mcp, ...fragment.mcp };
+        config.mcp = { ...config.mcp, ...interpolateEnvironment(fragment.mcp) };
       }
     }
   },

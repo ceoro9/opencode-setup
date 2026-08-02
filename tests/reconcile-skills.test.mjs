@@ -22,7 +22,11 @@ test("loads MCPs from the configured directory after shared configuration", asyn
       // Local entries override shared MCPs.
       "mcp": {
         "shared": { "type": "local", "command": ["local"] },
-        "machine": { "type": "local", "command": ["machine"] }
+        "machine": {
+          "type": "remote",
+          "url": "https://example.com/mcp",
+          "headers": { "Authorization": "Bearer {env:GITHUB_TOKEN}" }
+        }
       }
     }`);
 
@@ -34,7 +38,7 @@ test("loads MCPs from the configured directory after shared configuration", asyn
         const config = { mcp: { shared: { type: "local", command: ["shared"] } } };
         await hooks.config(config);
         console.log(JSON.stringify(config.mcp));
-      `], { env: { ...process.env, HOME: home, OPENCODE_MCP_DIR: directory } });
+      `], { env: { ...process.env, GITHUB_TOKEN: "test-token", HOME: home, OPENCODE_MCP_DIR: directory } });
       let stdout = "";
       child.stdout.on("data", (chunk) => { stdout += chunk; });
       child.once("error", reject);
@@ -43,7 +47,11 @@ test("loads MCPs from the configured directory after shared configuration", asyn
 
     assert.deepEqual(JSON.parse(output), {
       shared: { type: "local", command: ["local"] },
-      machine: { type: "local", command: ["machine"] },
+      machine: {
+        type: "remote",
+        url: "https://example.com/mcp",
+        headers: { Authorization: "Bearer test-token" },
+      },
     });
   } finally {
     await rm(home, { recursive: true, force: true });
