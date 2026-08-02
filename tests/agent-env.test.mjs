@@ -47,6 +47,94 @@ async function loadPlugin(fetch) {
   });
 }
 
+test("list_workers returns only managed workers with normalized lifecycle data", async () => {
+  const directory = await worktree();
+
+  try {
+    const hooks = await loadPlugin(async (url, init = {}) => {
+      assert.equal(String(url), "http://agentenv.test/v2/sandboxes");
+      assert.equal(init.headers["X-API-Key"], "agentenv-test-key");
+      return new Response(JSON.stringify([
+        {
+          sandboxID: "sandbox-worker",
+          alias: "opencode-worker-v2",
+          state: "running",
+          startedAt: "2026-08-02T09:00:00Z",
+          endAt: "2026-08-02T10:00:00Z",
+          cpuCount: 2,
+          memoryMB: 4096,
+          diskSizeMB: 65536,
+          metadata: {
+            opencodeAgentenvWorker: "worker-1",
+            opencodeAgentenvName: "candidate-a",
+            opencodeAgentenvModel: "cliproxy/deep",
+            opencodeAgentenvCohort: "cohort-1",
+            opencodeAgentenvBaseline: "abc123",
+            purpose: "benchmark",
+            candidate: "a",
+          },
+        },
+        {
+          sandboxID: "sandbox-unmanaged",
+          alias: "other-template",
+          state: "running",
+          metadata: { purpose: "other" },
+        },
+      ]), { status: 200 });
+    });
+    const result = await hooks.tool.list_workers.execute({
+      states: ["running"],
+      cohortID: "cohort-1",
+      metadata: { purpose: "benchmark" },
+    }, context(directory));
+    const output = JSON.parse(result.output);
+
+    assert.deepEqual(output.workers, [{
+      workerID: "worker-1",
+      name: "candidate-a",
+      model: { providerID: "cliproxy", modelID: "deep" },
+      metadata: { purpose: "benchmark", candidate: "a" },
+      cohortID: "cohort-1",
+      baselineCommit: "abc123",
+      sandboxID: "sandbox-worker",
+      template: "opencode-worker-v2",
+      state: "running",
+      startedAt: "2026-08-02T09:00:00Z",
+      expiresAt: "2026-08-02T10:00:00Z",
+      resources: { cpuCount: 2, memoryMB: 4096, diskSizeMB: 65536 },
+    }]);
+    assert.doesNotMatch(result.output, /opencodeAgentenv/);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("list_workers filters workers by metadata without requiring a Git baseline", async () => {
+  const directory = await worktree();
+
+  try {
+    await writeFile(join(directory, "README.md"), "modified\n");
+    const hooks = await loadPlugin(async () => new Response(JSON.stringify([
+      {
+        sandboxID: "sandbox-a",
+        state: "paused",
+        metadata: { opencodeAgentenvWorker: "worker-a", opencodeAgentenvName: "a", purpose: "review" },
+      },
+      {
+        sandboxID: "sandbox-b",
+        state: "running",
+        metadata: { opencodeAgentenvWorker: "worker-b", opencodeAgentenvName: "b", purpose: "implementation" },
+      },
+    ]), { status: 200 }));
+    const result = await hooks.tool.list_workers.execute({ metadata: { purpose: "review" } }, context(directory));
+    const output = JSON.parse(result.output);
+
+    assert.deepEqual(output.workers.map((worker) => worker.workerID), ["worker-a"]);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("spawn_worker creates one isolated worker per explicitly selected model", async () => {
   const directory = await worktree();
   const calls = [];

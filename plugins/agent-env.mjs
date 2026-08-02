@@ -22,6 +22,12 @@ const spawnWorkerArgs = {
   leaseSeconds: tool.schema.number().int().min(60).max(maxLeaseSeconds).optional(),
 };
 
+const listWorkersArgs = {
+  states: tool.schema.array(tool.schema.enum(["running", "paused"])).optional(),
+  metadata: tool.schema.record(tool.schema.string(), tool.schema.string()).optional(),
+  cohortID: tool.schema.string().min(1).optional(),
+};
+
 function required(value, name) {
   if (typeof value === "string" && value.trim()) return value.trim();
   throw new Error(`${name} must be configured before spawning workers`);
@@ -119,6 +125,41 @@ function workerEnvironment(input) {
   };
 }
 
+function workerFromSandbox(sandbox) {
+  const metadata = sandbox.metadata ?? {};
+  const [providerID, ...modelParts] = (metadata.opencodeAgentenvModel ?? "").split("/");
+  const modelID = modelParts.join("/");
+  const workerMetadata = Object.fromEntries(
+    Object.entries(metadata).filter(([key]) => !key.startsWith("opencodeAgentenv")),
+  );
+
+  return {
+    workerID: metadata.opencodeAgentenvWorker,
+    name: metadata.opencodeAgentenvName,
+    model: providerID && modelID ? { providerID, modelID } : undefined,
+    metadata: workerMetadata,
+    cohortID: metadata.opencodeAgentenvCohort,
+    baselineCommit: metadata.opencodeAgentenvBaseline,
+    sandboxID: sandbox.sandboxID,
+    template: sandbox.alias,
+    state: sandbox.state,
+    startedAt: sandbox.startedAt,
+    expiresAt: sandbox.endAt,
+    resources: {
+      cpuCount: sandbox.cpuCount,
+      memoryMB: sandbox.memoryMB,
+      diskSizeMB: sandbox.diskSizeMB,
+    },
+  };
+}
+
+function matchesWorker(worker, args) {
+  if (args.cohortID && worker.cohortID !== args.cohortID) return false;
+  if (args.states?.length && !args.states.includes(worker.state)) return false;
+
+  return Object.entries(args.metadata ?? {}).every(([key, value]) => worker.metadata[key] === value);
+}
+
 export default async (_input, options = {}) => {
   const fetchImpl = options.fetch ?? globalThis.fetch;
 
@@ -136,6 +177,23 @@ export default async (_input, options = {}) => {
 
   return {
     tool: {
+      list_workers: tool({
+        description: "List AgentENV sandboxes created by spawn_worker. Returns normalized worker identity, model, tags, cohort, baseline, lifecycle state, expiration, and resources without exposing credentials. Use this to track workers before creating more or performing lifecycle operations.",
+        args: listWorkersArgs,
+        async execute(args) {
+          const sandboxes = await agentenvRequest(fetchImpl, agentenvUrl, agentenvApiKey, "/v2/sandboxes");
+          const workers = sandboxes
+            .filter((sandbox) => sandbox.metadata?.opencodeAgentenvWorker)
+            .map(workerFromSandbox)
+            .filter((worker) => matchesWorker(worker, args));
+
+          return {
+            title: `Listed ${workers.length} worker${workers.length === 1 ? "" : "s"}`,
+            output: JSON.stringify({ workers }, null, 2),
+            metadata: { workers },
+          };
+        },
+      }),
       spawn_worker: tool({
         description: "Spawn one isolated AgentENV OpenCode worker per selected model. The host worktree must be clean; all workers receive the same immutable Git baseline and Cliproxy configuration, while the requested model is explicitly selected per worker. Optional metadata is copied to each worker as tags.",
         args: spawnWorkerArgs,

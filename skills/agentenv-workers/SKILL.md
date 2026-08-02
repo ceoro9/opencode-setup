@@ -5,7 +5,31 @@ description: Use when delegating implementation, research, verification, or revi
 
 # AgentENV Worker Delegation
 
-Use `spawn_worker` to create isolated OpenCode workers. The main agent remains the facilitator: it plans, chooses models, supplies worker names and tags, observes results, and decides what to accept. Workers perform repository work inside AgentENV; do not edit the host worktree as part of delegated work.
+Use `list_workers` and `spawn_worker` to manage isolated OpenCode workers. The main agent is the worker manager and facilitator: it inventories existing workers, plans capacity, chooses models, supplies names and tags, tracks IDs and lifecycle state, observes results, and decides what to accept. Workers perform repository work inside AgentENV; do not edit the host worktree as part of delegated work.
+
+## Management Loop
+
+The facilitator owns worker lifecycle. Before spawning, call `list_workers` to understand current capacity, avoid duplicates, and find reusable workers by name, cohort, model, state, or tags. After spawning, preserve each `workerID` and `sandboxID`, monitor expiration, and list again before reporting worker state.
+
+Use metadata consistently so workers remain discoverable. Prefer `purpose`, `task`, `issue`, `candidate`, `attempt`, and `ownerSession`. Use `cohortID` returned by `spawn_worker` to group workers created together.
+
+Do not assume a worker is alive, paused, or expired from conversation history. Query `list_workers`. Do not create replacement workers until checking whether a suitable worker already exists.
+
+## `list_workers` Contract
+
+Call without arguments for all plugin-managed workers, or filter by `states`, `cohortID`, and metadata tags:
+
+```json
+{
+  "states": ["running"],
+  "cohortID": "cohort-id",
+  "metadata": {
+    "purpose": "benchmark"
+  }
+}
+```
+
+The result includes worker and sandbox IDs, name, model, user metadata, cohort, baseline commit, template, state, expiration, and resources. It excludes unmanaged AgentENV sandboxes and internal metadata keys.
 
 ## When to Spawn Workers
 
@@ -68,11 +92,12 @@ Pass one entry per worker in `models`. Each entry must use the configured `clipr
 
 Before calling `spawn_worker`:
 
-1. Confirm the host Git worktree is clean. The tool rejects dirty worktrees to guarantee a common baseline.
-2. Confirm the task is sufficiently bounded and workers will not overlap on mutable state.
-3. Select only user-authorized model IDs.
-4. Choose the worker agent deliberately; default `build` is for execution, not review-only work.
-5. Use descriptive names and tags so results can be identified later.
+1. Call `list_workers` and verify that a suitable worker or duplicate cohort does not already exist.
+2. Confirm the host Git worktree is clean. The tool rejects dirty worktrees to guarantee a common baseline.
+3. Confirm the task is sufficiently bounded and workers will not overlap on mutable state.
+4. Select only user-authorized model IDs.
+5. Choose the worker agent deliberately; default `build` is for execution, not review-only work.
+6. Use descriptive names and tags so results can be identified later.
 
 A worker may fail while others succeed. Keep successful worker IDs and assess failures separately. Do not expose provider credentials; the plugin injects sandbox-local credentials and redacts AgentENV failure details.
 
@@ -99,4 +124,4 @@ Do not mention competing models in the task prompt. Compare only after each work
 
 ## Current Limit
 
-Only worker creation is available now. `run_task` and `collect_patch` are not implemented yet. After spawning, report the returned worker IDs and statuses; do not claim the workers performed work until task execution support exists.
+Worker listing and creation are available now. Pause, resume, timeout extension, deletion, `run_task`, and `collect_patch` are not implemented yet. The facilitator must still track expiration and report when a required lifecycle action cannot yet be performed. After spawning, list the workers and report returned worker IDs and states; do not claim they performed work until task execution support exists.
