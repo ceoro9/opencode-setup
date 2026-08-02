@@ -28,6 +28,7 @@ function context(directory) {
   const metadata = [];
   return {
     worktree: directory,
+    sessionID: "facilitator-session",
     abort: new AbortController().signal,
     metadata(input) {
       metadata.push(input);
@@ -77,6 +78,7 @@ test("list_workers returns only managed workers with normalized lifecycle data",
           memoryMB: 4096,
           diskSizeMB: 65536,
           metadata: {
+            opencodeAgentenvOwnerSession: "facilitator-session",
             opencodeAgentenvWorker: "worker-1",
             opencodeAgentenvName: "candidate-a",
             opencodeAgentenvModel: "cliproxy/deep",
@@ -104,6 +106,7 @@ test("list_workers returns only managed workers with normalized lifecycle data",
 
     assert.deepEqual(output.workers, [{
       workerID: "worker-1",
+      ownerSession: "facilitator-session",
       name: "candidate-a",
       model: { providerID: "cliproxy", modelID: "deep" },
       metadata: { purpose: "benchmark", candidate: "a" },
@@ -123,6 +126,36 @@ test("list_workers returns only managed workers with normalized lifecycle data",
   }
 });
 
+test("worker and task tools isolate facilitator fleets by session", async () => {
+  const directory = await worktree();
+  const credentialStore = join(tmpdir(), `opencode-agentenv-fleet-${crypto.randomUUID()}.json`);
+
+  try {
+    await writeFile(credentialStore, JSON.stringify({
+      version: 1,
+      workers: { "foreign-worker": { workerID: "foreign-worker", ownerSession: "other-session", sandboxID: "foreign-sandbox", serverPassword: "secret", workerAgent: "build", model: { providerID: "cliproxy", modelID: "fast" } } },
+      tasks: { "foreign-task": { taskID: "foreign-task", ownerSession: "other-session", workerID: "foreign-worker", sandboxID: "foreign-sandbox", sessionID: "remote-session", status: "submitted" } },
+    }));
+    const hooks = await loadPlugin(async (url) => {
+      if (String(url).endsWith("/v2/sandboxes")) return new Response(JSON.stringify([{
+        sandboxID: "foreign-sandbox",
+        state: "running",
+        metadata: { opencodeAgentenvOwnerSession: "other-session", opencodeAgentenvWorker: "foreign-worker" },
+      }]), { status: 200 });
+      throw new Error(`Unexpected request ${String(url)}`);
+    }, { credentialStore });
+    const ownContext = context(directory);
+
+    const listed = JSON.parse((await hooks.tool.list_workers.execute({}, ownContext)).output);
+    assert.deepEqual(listed.workers, []);
+    await assert.rejects(hooks.tool.run_task.execute({ workerID: "foreign-worker", task: "test" }, ownContext), /not part of this facilitator fleet/);
+    await assert.rejects(hooks.tool.get_task.execute({ taskID: "foreign-task" }, ownContext), /not part of this facilitator fleet/);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+    await rm(credentialStore, { force: true });
+  }
+});
+
 test("list_workers filters workers by metadata without requiring a Git baseline", async () => {
   const directory = await worktree();
 
@@ -132,12 +165,12 @@ test("list_workers filters workers by metadata without requiring a Git baseline"
       {
         sandboxID: "sandbox-a",
         state: "paused",
-        metadata: { opencodeAgentenvWorker: "worker-a", opencodeAgentenvName: "a", purpose: "review" },
+        metadata: { opencodeAgentenvOwnerSession: "facilitator-session", opencodeAgentenvWorker: "worker-a", opencodeAgentenvName: "a", purpose: "review" },
       },
       {
         sandboxID: "sandbox-b",
         state: "running",
-        metadata: { opencodeAgentenvWorker: "worker-b", opencodeAgentenvName: "b", purpose: "implementation" },
+        metadata: { opencodeAgentenvOwnerSession: "facilitator-session", opencodeAgentenvWorker: "worker-b", opencodeAgentenvName: "b", purpose: "implementation" },
       },
     ]), { status: 200 }));
     const result = await hooks.tool.list_workers.execute({ metadata: { purpose: "review" } }, context(directory));
@@ -146,6 +179,123 @@ test("list_workers filters workers by metadata without requiring a Git baseline"
     assert.deepEqual(output.workers.map((worker) => worker.workerID), ["worker-a"]);
   } finally {
     await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("wait_tasks synchronizes multiple worker results before comparison", async () => {
+  const directory = await worktree();
+  const credentialStore = join(tmpdir(), `opencode-agentenv-wait-${crypto.randomUUID()}.json`);
+  let statusCalls = 0;
+  let sleeps = 0;
+
+  try {
+    await writeFile(credentialStore, JSON.stringify({
+      version: 1,
+      workers: {
+        "worker-a": { workerID: "worker-a", sandboxID: "sandbox-a", serverPassword: "secret-a", workerAgent: "build", model: { providerID: "cliproxy", modelID: "fast" } },
+        "worker-b": { workerID: "worker-b", sandboxID: "sandbox-b", serverPassword: "secret-b", workerAgent: "build", model: { providerID: "cliproxy", modelID: "smart" } },
+      },
+      tasks: {
+        "task-a": { taskID: "task-a", ownerSession: "facilitator-session", workerID: "worker-a", sandboxID: "sandbox-a", sessionID: "session-a", title: "Candidate A", status: "submitted" },
+        "task-b": { taskID: "task-b", ownerSession: "facilitator-session", workerID: "worker-b", sandboxID: "sandbox-b", sessionID: "session-b", title: "Candidate B", status: "submitted" },
+      },
+    }));
+    const hooks = await loadPlugin(async (url, init = {}) => {
+      if (String(url).endsWith("/session/status")) {
+        statusCalls += 1;
+        const session = init.headers["x-agentenv-sandbox-id"] === "sandbox-a" ? "session-a" : "session-b";
+        return new Response(JSON.stringify(statusCalls <= 2 ? { [session]: { type: "busy" } } : {}), { status: 200 });
+      }
+      if (String(url).endsWith("/session/session-a/message")) {
+        return new Response(JSON.stringify([{ info: { role: "assistant", time: { completed: 1 } }, parts: [{ type: "text", text: "Result A" }] }]), { status: 200 });
+      }
+      if (String(url).endsWith("/session/session-b/message")) {
+        return new Response(JSON.stringify([{ info: { role: "assistant", time: { completed: 2 } }, parts: [{ type: "text", text: "Result B" }] }]), { status: 200 });
+      }
+      throw new Error(`Unexpected request ${String(url)}`);
+    }, {
+      credentialStore,
+      waitPollMilliseconds: 1,
+      waitSleep: async () => { sleeps += 1; },
+    });
+    const result = await hooks.tool.wait_tasks.execute({ taskIDs: ["task-a", "task-b"], timeoutSeconds: 10 }, context(directory));
+    const output = JSON.parse(result.output);
+
+    assert.equal(output.timedOut, false);
+    assert.deepEqual(output.tasks.map((task) => task.status), ["completed", "completed"]);
+    assert.deepEqual(output.tasks.map((task) => task.text), ["Result A", "Result B"]);
+    assert.equal(sleeps, 1);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+    await rm(credentialStore, { force: true });
+    await rm(`${credentialStore}.lock`, { force: true });
+  }
+});
+
+test("wait_tasks returns partial results when its synchronization deadline expires", async () => {
+  const directory = await worktree();
+  const credentialStore = join(tmpdir(), `opencode-agentenv-wait-timeout-${crypto.randomUUID()}.json`);
+  let now = 0;
+
+  try {
+    await writeFile(credentialStore, JSON.stringify({
+      version: 1,
+      workers: { "worker-a": { workerID: "worker-a", sandboxID: "sandbox-a", serverPassword: "secret", workerAgent: "build", model: { providerID: "cliproxy", modelID: "fast" } } },
+      tasks: { "task-a": { taskID: "task-a", ownerSession: "facilitator-session", workerID: "worker-a", sandboxID: "sandbox-a", sessionID: "session-a", title: "Candidate A", status: "submitted" } },
+    }));
+    const hooks = await loadPlugin(async (url) => {
+      if (String(url).endsWith("/session/status")) return new Response(JSON.stringify({ "session-a": { type: "busy" } }), { status: 200 });
+      throw new Error(`Unexpected request ${String(url)}`);
+    }, {
+      credentialStore,
+      waitNow: () => now,
+      waitPollMilliseconds: 10000,
+      waitSleep: async (milliseconds) => { now += milliseconds; },
+    });
+    const result = await hooks.tool.wait_tasks.execute({ taskIDs: ["task-a"], timeoutSeconds: 10 }, context(directory));
+    const output = JSON.parse(result.output);
+
+    assert.equal(output.timedOut, true);
+    assert.equal(output.tasks[0].status, "running");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+    await rm(credentialStore, { force: true });
+    await rm(`${credentialStore}.lock`, { force: true });
+  }
+});
+
+test("wait_tasks persists its latest observations when cancelled", async () => {
+  const directory = await worktree();
+  const credentialStore = join(tmpdir(), `opencode-agentenv-wait-cancel-${crypto.randomUUID()}.json`);
+  const abort = new AbortController();
+
+  try {
+    await writeFile(credentialStore, JSON.stringify({
+      version: 1,
+      workers: { "worker-a": { workerID: "worker-a", sandboxID: "sandbox-a", serverPassword: "secret", workerAgent: "build", model: { providerID: "cliproxy", modelID: "fast" } } },
+      tasks: { "task-a": { taskID: "task-a", ownerSession: "facilitator-session", workerID: "worker-a", sandboxID: "sandbox-a", sessionID: "session-a", title: "Candidate A", status: "submitted" } },
+    }));
+    const hooks = await loadPlugin(async (url) => {
+      if (String(url).endsWith("/session/status")) return new Response(JSON.stringify({ "session-a": { type: "busy" } }), { status: 200 });
+      throw new Error(`Unexpected request ${String(url)}`);
+    }, {
+      credentialStore,
+      waitSleep: async () => { abort.abort(); },
+      waitPollMilliseconds: 1,
+    });
+    const toolContext = context(directory);
+    toolContext.abort = abort.signal;
+
+    await assert.rejects(
+      hooks.tool.wait_tasks.execute({ taskIDs: ["task-a"], timeoutSeconds: 10 }, toolContext),
+      /cancelled/,
+    );
+    const state = JSON.parse(await readFile(credentialStore, "utf8"));
+    assert.equal(state.tasks["task-a"].status, "running");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+    await rm(credentialStore, { force: true });
+    await rm(`${credentialStore}.lock`, { force: true });
   }
 });
 
@@ -176,6 +326,7 @@ test("run_task submits work asynchronously and get_task retrieves the result", a
           alias: "opencode-worker-v2",
           state: "running",
           metadata: {
+            opencodeAgentenvOwnerSession: "facilitator-session",
             opencodeAgentenvWorker: "worker-1",
             opencodeAgentenvName: "implementation-deep",
             opencodeAgentenvModel: "cliproxy/deep",
@@ -265,7 +416,8 @@ test("run_task durably records a failed asynchronous submission", async () => {
         return new Response(JSON.stringify([{
           sandboxID: "sandbox-1",
           state: "running",
-          metadata: { opencodeAgentenvWorker: "worker-1", opencodeAgentenvName: "worker", opencodeAgentenvModel: "cliproxy/deep" },
+          metadata: { opencodeAgentenvOwnerSession: "facilitator-session",
+            opencodeAgentenvWorker: "worker-1", opencodeAgentenvName: "worker", opencodeAgentenvModel: "cliproxy/deep" },
         }]), { status: 200 });
       }
       if (String(url).endsWith("/global/health")) return new Response(JSON.stringify({ healthy: true }), { status: 200 });
@@ -297,7 +449,7 @@ test("run_task rejects workers without a matching local credential", async () =>
     const hooks = await loadPlugin(async () => new Response(JSON.stringify([{
       sandboxID: "sandbox-1",
       state: "running",
-      metadata: { opencodeAgentenvWorker: "worker-1" },
+      metadata: { opencodeAgentenvOwnerSession: "facilitator-session", opencodeAgentenvWorker: "worker-1" },
     }]), { status: 200 }));
 
     await assert.rejects(

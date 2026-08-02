@@ -47,6 +47,11 @@ const getTaskArgs = {
   taskID: tool.schema.string().min(1),
 };
 
+const waitTasksArgs = {
+  taskIDs: tool.schema.array(tool.schema.string().min(1)).min(1).max(8),
+  timeoutSeconds: tool.schema.number().int().min(10).max(3600).optional(),
+};
+
 function required(value, name) {
   if (typeof value === "string" && value.trim()) return value.trim();
   throw new Error(`${name} must be configured before spawning workers`);
@@ -168,6 +173,7 @@ function workerFromSandbox(sandbox) {
 
   return {
     workerID: metadata.opencodeAgentenvWorker,
+    ownerSession: metadata.opencodeAgentenvOwnerSession,
     name: metadata.opencodeAgentenvName,
     model: providerID && modelID ? { providerID, modelID } : undefined,
     metadata: workerMetadata,
@@ -342,6 +348,24 @@ function taskResult(task, messages, statuses) {
   };
 }
 
+async function refreshTask(fetchImpl, agentenvUrl, agentenvApiKey, task, credential) {
+  if (!credential || credential.sandboxID !== task.sandboxID) {
+    return { ...task, status: "failed", error: "Task has no matching worker credential" };
+  }
+
+  const headers = opencodeHeaders(agentenvApiKey, task.sandboxID, credential.serverPassword);
+  try {
+    const statuses = await opencodeRequest(fetchImpl, agentenvUrl, headers, "/session/status");
+    const sessionStatus = statuses?.[task.sessionID];
+    const messages = sessionStatus?.type === "busy" || sessionStatus?.type === "retry"
+      ? undefined
+      : await opencodeRequest(fetchImpl, agentenvUrl, headers, `/session/${encodeURIComponent(task.sessionID)}/message`);
+    return taskResult(task, messages, statuses);
+  } catch {
+    return { ...task, status: "failed", error: "Worker is unreachable" };
+  }
+}
+
 export default async (_input, options = {}) => {
   const fetchImpl = options.fetch ?? globalThis.fetch;
 
@@ -361,6 +385,9 @@ export default async (_input, options = {}) => {
   const repositoryMaterialize = options.materializeRepository ?? materializeRepository;
   const workerBootstrap = options.bootstrapWorker ?? bootstrapWorkerServer;
   const workerHealthCheck = options.waitForWorkerHealth ?? waitForWorkerHealth;
+  const waitSleep = options.waitSleep ?? ((milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)));
+  const waitNow = options.waitNow ?? Date.now;
+  const waitPollMilliseconds = options.waitPollMilliseconds ?? 2000;
   const providerID = options.providerID ?? "cliproxy";
 
   return {
@@ -368,10 +395,10 @@ export default async (_input, options = {}) => {
       list_workers: tool({
         description: "List AgentENV sandboxes created by spawn_worker. Returns normalized worker identity, model, tags, cohort, baseline, lifecycle state, expiration, and resources without exposing credentials. Use this to track workers before creating more or performing lifecycle operations.",
         args: listWorkersArgs,
-        async execute(args) {
+        async execute(args, context) {
           const sandboxes = await agentenvRequest(fetchImpl, agentenvUrl, agentenvApiKey, "/v2/sandboxes");
           const workers = sandboxes
-            .filter((sandbox) => sandbox.metadata?.opencodeAgentenvWorker)
+            .filter((sandbox) => sandbox.metadata?.opencodeAgentenvOwnerSession === context.sessionID)
             .map(workerFromSandbox)
             .filter((worker) => matchesWorker(worker, args));
 
@@ -385,27 +412,18 @@ export default async (_input, options = {}) => {
       list_tasks: tool({
         description: "List tasks submitted to AgentENV OpenCode workers. Refreshes remote session status without waiting and returns task IDs, workers, sessions, models, titles, submission times, and current status.",
         args: listTasksArgs,
-        async execute(args) {
+        async execute(args, context) {
           const state = await loadState(credentialStore);
           const tasks = [];
 
           for (const task of Object.values(state.tasks)) {
+            if (task.ownerSession !== context.sessionID) continue;
             if (args.workerID && task.workerID !== args.workerID) continue;
             const credential = state.workers[task.workerID];
             let result = task;
 
             if (credential?.sandboxID === task.sandboxID) {
-              const headers = opencodeHeaders(agentenvApiKey, task.sandboxID, credential.serverPassword);
-              try {
-                const statuses = await opencodeRequest(fetchImpl, agentenvUrl, headers, "/session/status");
-                const sessionStatus = statuses?.[task.sessionID];
-                const messages = sessionStatus?.type === "busy" || sessionStatus?.type === "retry"
-                  ? undefined
-                  : await opencodeRequest(fetchImpl, agentenvUrl, headers, `/session/${encodeURIComponent(task.sessionID)}/message`);
-                result = taskResult(task, messages, statuses);
-              } catch {
-                result = { ...task, status: "failed", error: "Worker is unreachable" };
-              }
+              result = await refreshTask(fetchImpl, agentenvUrl, agentenvApiKey, task, credential);
             }
 
             if (!args.statuses?.length || args.statuses.includes(result.status)) tasks.push(result);
@@ -418,13 +436,61 @@ export default async (_input, options = {}) => {
           };
         },
       }),
+      wait_tasks: tool({
+        description: "Wait for one or more submitted worker tasks to reach completed or failed state. Use only when the current request requires finished results, such as comparing models or producing a final synthesis. Returns terminal and partial results on timeout.",
+        args: waitTasksArgs,
+        async execute(args, context) {
+          const state = await loadState(credentialStore);
+          const tasks = args.taskIDs.map((taskID) => {
+            const task = state.tasks[taskID];
+            if (!task || task.ownerSession !== context.sessionID) throw new Error(`Task ${taskID} is not part of this facilitator fleet`);
+            return task;
+          });
+          const timeoutSeconds = args.timeoutSeconds ?? 1800;
+          const deadline = waitNow() + timeoutSeconds * 1000;
+          let results = tasks;
+
+          context.metadata({
+            title: `Waiting for ${tasks.length} worker task${tasks.length === 1 ? "" : "s"}`,
+            metadata: { taskIDs: args.taskIDs },
+          });
+
+          try {
+            while (true) {
+              if (context.abort.aborted) throw new Error("Waiting for worker tasks was cancelled");
+              results = await Promise.all(tasks.map((task) =>
+                refreshTask(fetchImpl, agentenvUrl, agentenvApiKey, task, state.workers[task.workerID]),
+              ));
+              const terminal = results.every((result) => result.status === "completed" || result.status === "failed");
+              if (terminal || waitNow() >= deadline) break;
+              await waitSleep(Math.min(waitPollMilliseconds, Math.max(0, deadline - waitNow())));
+            }
+          } catch (error) {
+            await updateState(credentialStore, (current) => {
+              for (const result of results) current.tasks[result.taskID] = result;
+            });
+            throw error;
+          }
+
+          await updateState(credentialStore, (current) => {
+            for (const result of results) current.tasks[result.taskID] = result;
+          });
+          const timedOut = results.some((result) => result.status !== "completed" && result.status !== "failed");
+
+          return {
+            title: timedOut ? `Timed out waiting for worker tasks` : `Worker tasks finished`,
+            output: JSON.stringify({ timedOut, tasks: results }, null, 2),
+            metadata: { timedOut, tasks: results },
+          };
+        },
+      }),
       get_task: tool({
         description: "Read the current status and result of one previously submitted worker task. Returns immediately; completed tasks include final assistant text and message attribution.",
         args: getTaskArgs,
-        async execute(args) {
+        async execute(args, context) {
           const state = await loadState(credentialStore);
           const task = state.tasks[args.taskID];
-          if (!task) throw new Error(`Task ${args.taskID} is not known`);
+          if (!task || task.ownerSession !== context.sessionID) throw new Error(`Task ${args.taskID} is not part of this facilitator fleet`);
 
           const credential = state.workers[task.workerID];
           if (!credential || credential.sandboxID !== task.sandboxID) {
@@ -450,9 +516,12 @@ export default async (_input, options = {}) => {
         args: runTaskArgs,
         async execute(args, context) {
           const sandboxes = await agentenvRequest(fetchImpl, agentenvUrl, agentenvApiKey, "/v2/sandboxes");
-          const sandbox = sandboxes.find((candidate) => candidate.metadata?.opencodeAgentenvWorker === args.workerID);
+          const sandbox = sandboxes.find((candidate) =>
+            candidate.metadata?.opencodeAgentenvWorker === args.workerID &&
+            candidate.metadata?.opencodeAgentenvOwnerSession === context.sessionID,
+          );
 
-          if (!sandbox) throw new Error(`Worker ${args.workerID} is not running or no longer exists`);
+          if (!sandbox) throw new Error(`Worker ${args.workerID} is not part of this facilitator fleet or no longer exists`);
           if (sandbox.state !== "running") throw new Error(`Worker ${args.workerID} is ${sandbox.state}; resume it before running a task`);
 
           const state = await loadState(credentialStore);
@@ -475,6 +544,7 @@ export default async (_input, options = {}) => {
           });
           const task = {
             taskID: randomUUID(),
+            ownerSession: context.sessionID,
             workerID: worker.workerID,
             workerName: worker.name,
             sandboxID: worker.sandboxID,
@@ -577,6 +647,7 @@ export default async (_input, options = {}) => {
                   ...args.metadata,
                   ...model.metadata,
                   opencodeAgentenvCohort: cohortID,
+                  opencodeAgentenvOwnerSession: context.sessionID,
                   opencodeAgentenvWorker: workerID,
                   opencodeAgentenvName: model.name ?? modelKey(model),
                   opencodeAgentenvBaseline: base.commit,
@@ -619,6 +690,7 @@ export default async (_input, options = {}) => {
                 );
                 spawnedCredentials.push({
                   workerID,
+                  ownerSession: context.sessionID,
                   sandboxID: sandbox.sandboxID,
                   serverPassword,
                   workerAgent,
@@ -629,6 +701,7 @@ export default async (_input, options = {}) => {
 
                 return {
                   workerID,
+                  ownerSession: context.sessionID,
                   name: model.name ?? modelKey(model),
                   model: { providerID: model.providerID, modelID: model.modelID },
                   metadata: { ...args.metadata, ...model.metadata },
@@ -646,6 +719,7 @@ export default async (_input, options = {}) => {
                 }
                 return {
                   workerID,
+                  ownerSession: context.sessionID,
                   name: model.name ?? modelKey(model),
                   model: { providerID: model.providerID, modelID: model.modelID },
                   metadata: { ...args.metadata, ...model.metadata },

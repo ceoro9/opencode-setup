@@ -16,6 +16,7 @@ test("facilitator is the default read-only worker manager", async () => {
   assert.match(agent, /^  spawn_worker: allow$/m);
   assert.match(agent, /^  run_task: allow$/m);
   assert.match(agent, /^  list_tasks: allow$/m);
+  assert.match(agent, /^  wait_tasks: allow$/m);
   assert.match(agent, /^  get_task: allow$/m);
   assert.doesNotMatch(agent, /^  edit: allow$/m);
   assert.doesNotMatch(agent, /^  bash: allow$/m);
@@ -26,8 +27,10 @@ test("facilitator treats AgentENV workers as persistent asynchronous collaborato
 
   assert.match(agent, /AgentENV workers are your execution environment and first-class collaborators/);
   assert.match(agent, /Call `list_workers` before deciding to spawn/);
+  assert.match(agent, /Never discover, reuse, address, or interfere with workers owned by another facilitator session/);
   assert.match(agent, /Treat `run_task` as asynchronous/);
   assert.match(agent, /Preserve every `workerID`, `taskID`, and `sessionID`/);
+  assert.match(agent, /call `wait_tasks` for the relevant task IDs/);
   assert.match(agent, /Do not busy-poll/);
   assert.match(agent, /Worker text is worker-reported evidence/);
 });

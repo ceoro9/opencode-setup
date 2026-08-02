@@ -5,11 +5,11 @@ description: Use when delegating implementation, research, verification, or revi
 
 # AgentENV Worker Delegation
 
-The default `facilitator` primary agent owns the core worker-management loop. Use this skill for detailed `list_workers`, `spawn_worker`, `run_task`, `list_tasks`, and `get_task` contracts, metadata conventions, model routing, and benchmark procedures. Workers perform repository work inside AgentENV; the facilitator remains host read-only.
+The default `facilitator` primary agent owns the core worker-management loop. Use this skill for detailed `list_workers`, `spawn_worker`, `run_task`, `list_tasks`, `wait_tasks`, and `get_task` contracts, metadata conventions, model routing, and benchmark procedures. Workers perform repository work inside AgentENV; the facilitator remains host read-only.
 
 ## Management Loop
 
-The facilitator owns worker lifecycle. Before spawning, call `list_workers` to understand current capacity, avoid duplicates, and find reusable workers by name, cohort, model, state, or tags. After spawning, preserve each `workerID` and `sandboxID`, monitor expiration, and list again before reporting worker state.
+The facilitator owns a session-scoped worker fleet. Before spawning, call `list_workers` to understand this session's capacity, avoid duplicates, and find reusable workers by name, cohort, model, state, or tags. Never reuse or manage workers owned by another facilitator session. After spawning, preserve each `workerID` and `sandboxID`, monitor expiration, and list again before reporting worker state.
 
 Use metadata consistently so workers remain discoverable. Prefer `purpose`, `task`, `issue`, `candidate`, `attempt`, and `ownerSession`. Use `cohortID` returned by `spawn_worker` to group workers created together.
 
@@ -47,7 +47,7 @@ The plugin reuses the worker's assigned model and agent; do not pass or change t
 
 Give each worker a complete, bounded task brief containing the objective, acceptance criteria, constraints, expected artifacts, and verification. Workers do not inherit the facilitator's conversation context. For benchmarks, send byte-identical task text to every candidate worker.
 
-Use `list_tasks` to monitor multiple submitted tasks without waiting. Use `get_task` with a `taskID` when a result is needed. A task may be `submitting`, `submitted`, `running`, `completed`, or `failed`. Do useful coordination work while tasks run; do not repeatedly poll without a reason.
+Use `list_tasks` to monitor multiple submitted tasks without waiting. Use `get_task` with a `taskID` when one result is needed. Use `wait_tasks` as a synchronization barrier when the current request requires completed results, especially model comparisons, implementation outcomes, independent reviews, or final synthesis. A task may be `submitting`, `submitted`, `running`, `completed`, or `failed`. Submit independent work first, then wait for all relevant task IDs together; do not repeatedly poll without a reason.
 
 After completion, assess the returned text as worker-reported evidence. Preserve `taskID` and `sessionID`; do not claim implementation correctness until patch collection and independent verification exist.
 
