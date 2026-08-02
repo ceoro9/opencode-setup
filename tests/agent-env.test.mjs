@@ -44,6 +44,14 @@ async function loadPlugin(fetch, options = {}) {
     cliproxyUrl: "https://cliproxy.test/v1",
     cliproxyApiKey: "cliproxy-test-key",
     credentialStore: join(tmpdir(), `opencode-agentenv-credentials-${crypto.randomUUID()}.json`),
+    createRepositoryBundle: async () => {
+      const directory = await mkdtemp(join(tmpdir(), "opencode-agentenv-test-bundle-"));
+      const path = join(directory, "repository.bundle");
+      await writeFile(path, "bundle");
+      return { directory, path };
+    },
+    uploadRepositoryBundle: async () => undefined,
+    materializeRepository: async () => undefined,
     bootstrapWorker: async () => undefined,
     waitForWorkerHealth: async () => ({ healthy: true, version: "1.18.11" }),
     fetch,
@@ -74,6 +82,7 @@ test("list_workers returns only managed workers with normalized lifecycle data",
             opencodeAgentenvModel: "cliproxy/deep",
             opencodeAgentenvCohort: "cohort-1",
             opencodeAgentenvBaseline: "abc123",
+            opencodeAgentenvRepository: "/workspace/repo",
             purpose: "benchmark",
             candidate: "a",
           },
@@ -100,6 +109,7 @@ test("list_workers returns only managed workers with normalized lifecycle data",
       metadata: { purpose: "benchmark", candidate: "a" },
       cohortID: "cohort-1",
       baselineCommit: "abc123",
+      repositoryPath: "/workspace/repo",
       sandboxID: "sandbox-worker",
       template: "opencode-worker-v2",
       state: "running",
@@ -303,6 +313,8 @@ test("spawn_worker creates one isolated worker per explicitly selected model", a
   const directory = await worktree();
   const credentialStore = join(tmpdir(), `opencode-agentenv-spawn-${crypto.randomUUID()}.json`);
   const calls = [];
+  const provisioning = [];
+  let bundleCreates = 0;
 
   try {
     const hooks = await loadPlugin(async (url, init = {}) => {
@@ -314,7 +326,19 @@ test("spawn_worker creates one isolated worker per explicitly selected model", a
       }
 
       return new Response(JSON.stringify({ templateID: "opencode-worker" }), { status: 200 });
-    }, { credentialStore });
+    }, {
+      credentialStore,
+      createRepositoryBundle: async () => {
+        bundleCreates += 1;
+        const directory = await mkdtemp(join(tmpdir(), "opencode-agentenv-spawn-bundle-"));
+        const path = join(directory, "repository.bundle");
+        await writeFile(path, "bundle");
+        return { directory, path };
+      },
+      uploadRepositoryBundle: async (_fetch, _url, _key, sandboxID) => provisioning.push(`upload:${sandboxID}`),
+      materializeRepository: async (sandboxID) => provisioning.push(`materialize:${sandboxID}`),
+      bootstrapWorker: async (sandboxID) => provisioning.push(`bootstrap:${sandboxID}`),
+    });
     const tool = hooks.tool.spawn_worker;
     const toolContext = context(directory);
     const result = await tool.execute({
@@ -329,12 +353,18 @@ test("spawn_worker creates one isolated worker per explicitly selected model", a
     const creates = calls.filter(({ init }) => init.method === "POST");
 
     assert.equal(calls[0].url, "http://agentenv.test/templates/opencode-worker");
+    assert.equal(bundleCreates, 1);
     assert.equal(creates.length, 2);
     assert.equal(output.workers.length, 2);
     assert.ok(output.workers.every((worker) => worker.status === "spawned"));
     assert.equal(output.baseline.commit.length, 40);
     assert.deepEqual(output.metadata, { purpose: "benchmark", task: "worker-spawn" });
     assert.deepEqual(output.workers.map((worker) => worker.name), ["candidate-a", "candidate-b"]);
+    assert.ok(output.workers.every((worker) => worker.repositoryPath === "/workspace/repo"));
+    assert.ok(output.workers.every((worker) => worker.baselineCommit === output.baseline.commit));
+    assert.equal(provisioning.filter((step) => step.startsWith("upload:")).length, 2);
+    assert.equal(provisioning.filter((step) => step.startsWith("materialize:")).length, 2);
+    assert.equal(provisioning.filter((step) => step.startsWith("bootstrap:")).length, 2);
     assert.deepEqual(output.workers.map((worker) => worker.metadata), [
       { purpose: "benchmark", task: "worker-spawn", candidate: "a" },
       { purpose: "benchmark", task: "worker-spawn", candidate: "b" },

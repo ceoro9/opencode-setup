@@ -60,7 +60,7 @@ If the worktree is dirty and a new worker is required, report the clean-baseline
 
 ## Evidence and Boundaries
 
-Worker text is worker-reported evidence, not proof that host files changed or verification passed. Preserve attribution by worker, model, task, and session. Use independent workers for consequential verification and compare evidence before recommending acceptance.
+Each spawned worker receives the clean host repository at the recorded baseline commit in `/workspace/repo`. Workers may inspect, edit, test, and commit there without changing the host. Worker text is worker-reported evidence, not proof that host files changed or verification passed. Preserve attribution by worker, model, task, and session. Use independent workers for consequential verification and compare evidence before recommending acceptance.
 
 Patch collection, host integration, pause, resume, deletion, and lease extension are not available yet. State these limitations when they block completion. Never imply that sandbox changes exist on the host.
 

@@ -1,7 +1,8 @@
 import { execFile as execFileCallback } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
-import { mkdir, open, readFile, rename, unlink, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
+import { openAsBlob } from "node:fs";
+import { chmod, mkdir, mkdtemp, open, readFile, rename, rm, unlink, writeFile } from "node:fs/promises";
+import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { tool } from "@opencode-ai/plugin";
@@ -85,7 +86,21 @@ async function baseline(worktree) {
     throw new Error("spawn_worker requires a clean Git worktree so every worker has the same baseline");
   }
 
+  const { stdout: submodules } = await execFile("git", ["ls-files", "--stage"], options);
+  if (submodules.split("\n").some((line) => line.startsWith("160000 "))) {
+    throw new Error("spawn_worker does not yet support repositories containing Git submodules");
+  }
+
   return { commit: commit.trim() };
+}
+
+async function createRepositoryBundle(worktree, commit) {
+  const directory = await mkdtemp(join(tmpdir(), "opencode-agentenv-bundle-"));
+  const path = join(directory, "repository.bundle");
+  await execFile("git", ["bundle", "create", path, "--branches", "--tags", commit], { cwd: worktree, encoding: "utf8" });
+  await execFile("git", ["bundle", "verify", path], { cwd: worktree, encoding: "utf8" });
+  await chmod(path, 0o600);
+  return { directory, path };
 }
 
 function modelKey(model) {
@@ -158,6 +173,7 @@ function workerFromSandbox(sandbox) {
     metadata: workerMetadata,
     cohortID: metadata.opencodeAgentenvCohort,
     baselineCommit: metadata.opencodeAgentenvBaseline,
+    repositoryPath: metadata.opencodeAgentenvRepository,
     sandboxID: sandbox.sandboxID,
     template: sandbox.alias,
     state: sandbox.state,
@@ -245,13 +261,43 @@ async function opencodeRequest(fetchImpl, agentenvUrl, headers, path, init = {})
   return responseJson(response, `${init.method ?? "GET"} OpenCode ${path}`);
 }
 
+async function uploadRepositoryBundle(fetchImpl, agentenvUrl, agentenvApiKey, sandboxID, bundlePath, signal) {
+  const form = new FormData();
+  form.append("file", await openAsBlob(bundlePath), "repository.bundle");
+  const url = new URL("/files", `${agentenvUrl.replace(/\/$/, "")}/`);
+  url.searchParams.set("path", "/tmp/repository.bundle");
+  const response = await fetchImpl(url, {
+    method: "POST",
+    headers: {
+      "X-API-Key": agentenvApiKey,
+      "x-agentenv-sandbox-id": sandboxID,
+      "x-agentenv-target-port": "49983",
+    },
+    body: form,
+    signal,
+  });
+  await responseJson(response, "Upload repository bundle");
+}
+
+async function materializeRepository(sandboxID, commit) {
+  await execFile("aenv", [
+    "exec",
+    sandboxID,
+    "sh",
+    "-lc",
+    "set -eu; test ! -e /workspace/repo; git clone /tmp/repository.bundle /workspace/repo; git -C /workspace/repo checkout --detach \"$1\"; test \"$(git -C /workspace/repo rev-parse HEAD)\" = \"$1\"; test -z \"$(git -C /workspace/repo status --porcelain=v1 --untracked-files=all)\"; rm -f /tmp/repository.bundle",
+    "sh",
+    commit,
+  ], { encoding: "utf8" });
+}
+
 async function bootstrapWorkerServer(sandboxID) {
   await execFile("aenv", [
     "exec",
     sandboxID,
     "sh",
     "-lc",
-    "pkill -x opencode || true; nohup opencode serve --hostname 0.0.0.0 --port 4096 >/tmp/opencode-worker.log 2>&1 </dev/null &",
+    "cd /workspace/repo; pkill -x opencode || true; nohup opencode serve --hostname 0.0.0.0 --port 4096 >/tmp/opencode-worker.log 2>&1 </dev/null &",
   ], { encoding: "utf8" });
 }
 
@@ -310,6 +356,9 @@ export default async (_input, options = {}) => {
   const cliproxyApiKey = options.cliproxyApiKey ?? process.env.CLIPROXY_API_KEY;
   const restrictEgress = options.restrictEgress ?? process.env.AGENTENV_RESTRICT_EGRESS === "true";
   const credentialStore = options.credentialStore ?? process.env.AGENTENV_CREDENTIAL_STORE ?? join(homedir(), ".local", "state", "opencode", "agentenv-workers.json");
+  const repositoryBundleCreate = options.createRepositoryBundle ?? createRepositoryBundle;
+  const repositoryUpload = options.uploadRepositoryBundle ?? uploadRepositoryBundle;
+  const repositoryMaterialize = options.materializeRepository ?? materializeRepository;
   const workerBootstrap = options.bootstrapWorker ?? bootstrapWorkerServer;
   const workerHealthCheck = options.waitForWorkerHealth ?? waitForWorkerHealth;
   const providerID = options.providerID ?? "cliproxy";
@@ -509,10 +558,13 @@ export default async (_input, options = {}) => {
           });
 
           await agentenvRequest(fetchImpl, agentenvUrl, agentenvApiKey, `/templates/${encodeURIComponent(template)}`);
-
+          const bundle = await repositoryBundleCreate(context.worktree, base.commit);
           const spawnedCredentials = [];
-          const workers = await Promise.all(
-            args.models.map(async (model) => {
+          let workers;
+
+          try {
+            workers = await Promise.all(
+              args.models.map(async (model) => {
               const workerID = randomUUID();
               const serverPassword = randomBytes(32).toString("base64url");
               const request = {
@@ -528,6 +580,7 @@ export default async (_input, options = {}) => {
                   opencodeAgentenvWorker: workerID,
                   opencodeAgentenvName: model.name ?? modelKey(model),
                   opencodeAgentenvBaseline: base.commit,
+                  opencodeAgentenvRepository: "/workspace/repo",
                   opencodeAgentenvModel: modelKey(model),
                 },
                 envVars: workerEnvironment({
@@ -548,6 +601,15 @@ export default async (_input, options = {}) => {
                   body: JSON.stringify(request),
                   signal: context.abort,
                 });
+                await repositoryUpload(
+                  fetchImpl,
+                  agentenvUrl,
+                  agentenvApiKey,
+                  sandbox.sandboxID,
+                  bundle.path,
+                  context.abort,
+                );
+                await repositoryMaterialize(sandbox.sandboxID, base.commit);
                 await workerBootstrap(sandbox.sandboxID);
                 await workerHealthCheck(
                   fetchImpl,
@@ -561,6 +623,8 @@ export default async (_input, options = {}) => {
                   serverPassword,
                   workerAgent,
                   model: { providerID: model.providerID, modelID: model.modelID },
+                  repositoryPath: "/workspace/repo",
+                  baselineCommit: base.commit,
                 });
 
                 return {
@@ -570,6 +634,8 @@ export default async (_input, options = {}) => {
                   metadata: { ...args.metadata, ...model.metadata },
                   status: "spawned",
                   sandboxID: sandbox.sandboxID,
+                  repositoryPath: "/workspace/repo",
+                  baselineCommit: base.commit,
                   expiresInSeconds: leaseSeconds,
                 };
               } catch (error) {
@@ -587,8 +653,11 @@ export default async (_input, options = {}) => {
                   error: error instanceof Error ? error.message : String(error),
                 };
               }
-            }),
-          );
+              }),
+            );
+          } finally {
+            await rm(bundle.directory, { recursive: true, force: true });
+          }
 
           if (spawnedCredentials.length) {
             await updateState(credentialStore, (state) => {
