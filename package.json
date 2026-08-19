@@ -1,8 +1,9 @@
 {
   "private": true,
   "scripts": {
-    "postinstall": "npm run skills:reconcile",
+    "postinstall": "npm run skills:reconcile && npm run openviking:reconcile",
     "skills:reconcile": "node scripts/reconcile-skills.mjs",
+    "openviking:reconcile": "node scripts/reconcile-openviking.mjs",
     "test": "node --test tests/*.test.mjs"
   },
   "dependencies": {
