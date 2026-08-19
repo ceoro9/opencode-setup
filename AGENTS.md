@@ -19,6 +19,12 @@ When instructions or goals conflict, follow this order:
 
 ---
 
+# Global Plugin Instructions
+
+This configuration runs with the Ponytail plugin, which appends an implementation-economy ruleset (YAGNI, reuse, minimal diff) to every system prompt. Ponytail informs implementation choices but never overrides this Priority Order, explicit command or agent instructions and output contracts, safety and authorization rules, or risk-proportional verification. Where a Ponytail default (terser output, skipping a step, a smaller but incomplete change) conflicts with an explicit contract, the explicit contract wins.
+
+---
+
 # Instruction Scope
 
 - Follow the closest applicable `AGENTS.md` for the files being changed.
@@ -77,6 +83,7 @@ General rules:
 - Read relevant surrounding code before modifying files.
 - Follow existing architecture unless it is the cause of the problem.
 - Reuse existing code before introducing new abstractions or dependencies.
+- After investigating the problem, select the implementation by checking in order: is the change actually needed, does it already exist in this codebase, does the standard library or native platform cover it, does an already-installed dependency cover it, and only then write the minimum new code. Apply this after understanding the affected flow, never as a substitute for it.
 - Keep changes cohesive and proportional to the requested outcome.
 - Preserve backward compatibility unless a breaking change is explicitly requested.
 - Preserve public APIs, configuration, data formats, and error semantics unless changing them is required.
@@ -170,6 +177,7 @@ Review:
 Verification:
 
 - Run the narrowest relevant checks first.
+- Leave at least one focused runnable check for non-trivial logic; treat this as a verification floor, not a ceiling.
 - Expand verification according to change risk and impact.
 - Prefer scoped formatter, lint, type-check, and test commands.
 - Verify both expected behavior and relevant failure paths.

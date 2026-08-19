@@ -34,6 +34,7 @@ Refactor only when the improvement is clear and locally verifiable. Favor:
 - removing duplication or indirection that obscures intent
 - consistent use of existing project patterns and utilities
 - smaller, easier-to-follow units where this genuinely improves readability
+- deletion over addition: prefer removing dead or redundant code over reorganizing it
 
 Do not:
 
@@ -41,8 +42,11 @@ Do not:
 - change public APIs, outputs, configuration, persistence formats, dependencies, or architecture
 - speculate about intended behavior not proven by code and tests
 - rewrite broad areas solely for stylistic preference
+- introduce a new abstraction, interface, or indirection layer to improve stylistic consistency alone
 - alter unrelated user changes
 - commit, push, create pull requests, deploy, or modify remote systems
+
+Elegance alone is not sufficient justification for a change. Prefer `no safe improvement found` over a rewrite whose benefit cannot be demonstrated from local code and tests.
 
 When a potential improvement could change behavior or cannot be demonstrated as safe from local evidence, leave it unchanged and state the reason.
 

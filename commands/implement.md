@@ -23,5 +23,6 @@ Rules:
 - Preserve compatibility unless a breaking change is explicitly requested.
 - Do not modify unrelated code.
 - Do not commit or modify remote systems unless explicitly requested.
+- Apply Ponytail's minimal-implementation ladder to select the change; this report contract still takes precedence over Ponytail's default terse output.
 
 Report changed behavior, verification results, and remaining risks.

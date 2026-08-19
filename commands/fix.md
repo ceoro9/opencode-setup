@@ -22,5 +22,6 @@ Rules:
 - Do not mask symptoms when the root cause can be fixed within scope.
 - Do not perform unrelated cleanup or refactoring.
 - Preserve existing behavior outside the bug unless explicitly requested.
+- Apply Ponytail's minimal-implementation ladder to select the fix; this report contract still takes precedence over Ponytail's default terse output.
 
 Report the root cause, changed behavior, verification, and remaining risk.

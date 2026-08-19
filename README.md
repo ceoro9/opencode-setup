@@ -19,6 +19,10 @@ This workflow controls that risk through explicit boundaries:
 
 The approach combines agent autonomy with proportional, evidence-based checkpoints. Agents retain enough freedom to complete cohesive work efficiently, while humans retain authority over intent, trade-offs, scope, review depth, and acceptance.
 
+## Ponytail
+
+The [`@dietrichgebert/ponytail`](https://github.com/dietrichgebert/ponytail) plugin (declared in `opencode.jsonc`) injects an implementation-economy ruleset into every system prompt: prefer the smallest solution that reuses existing code, the standard library, or native platform features before writing new code. It is a policy layer inside implementation, not a replacement for this workflow. `AGENTS.md` states the precedence: Ponytail informs implementation choices but never overrides the Priority Order, explicit command or agent output contracts, safety rules, or risk-proportional verification.
+
 ## AgentENV facilitator
 
 Plain non-trivial prompts start with the read-only `facilitator` primary agent. It inventories persistent workers, selects models, submits self-contained tasks asynchronously, coordinates concurrent work, and retrieves results only at meaningful decision points. AgentENV workers each run an isolated OpenCode server with their own model configuration, workspace, sessions, and task history.
