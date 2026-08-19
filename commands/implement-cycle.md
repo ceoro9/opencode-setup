@@ -14,6 +14,7 @@ $ARGUMENTS
 - On later invocations, use the latest compact cycle checkpoint plus subsequent user decisions. Do not reconstruct or restate every earlier cycle report.
 - Treat new arguments as the task on the first invocation and as changed constraints or additional guidance on later invocations.
 - Revalidate repository state before editing. Ask only when missing information materially changes behavior, compatibility, architecture, security, or scope.
+- Apply Ponytail's minimal-implementation ladder to select the change; this command's Implement, Fast Drift Check, and Report contracts take precedence over Ponytail's default terse output.
 
 ## Implement
 

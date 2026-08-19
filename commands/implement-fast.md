@@ -16,6 +16,7 @@ Rules:
 - Do not perform unrelated cleanup, refactoring, or architectural work.
 - Run the narrowest relevant tests, lint, and type checks available.
 - Fix failures caused by the change; distinguish pre-existing failures.
+- Apply Ponytail's minimal-implementation ladder to select the change; this report contract still takes precedence over Ponytail's default terse output.
 
 Report only:
 
