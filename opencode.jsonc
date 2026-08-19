@@ -42,6 +42,7 @@
   "small_model": "cliproxy/fast",
 
   "plugin": [
+    "@dietrichgebert/ponytail",
     "./plugins/load-external-mcps.mjs",
     "./plugins/agent-env.mjs"
   ],
