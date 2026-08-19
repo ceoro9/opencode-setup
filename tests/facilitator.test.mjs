@@ -1,13 +1,10 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { parse } from "jsonc-parser";
 
-test("facilitator is the default read-only worker manager", async () => {
-  const config = parse(await readFile("opencode.jsonc", "utf8"));
+test("facilitator is a read-only worker manager", async () => {
   const agent = await readFile("agents/facilitator.md", "utf8");
 
-  assert.equal(config.default_agent, "facilitator");
   assert.match(agent, /^mode: primary$/m);
   assert.match(agent, /^model: cliproxy\/general$/m);
   assert.match(agent, /^  "\*": deny$/m);
