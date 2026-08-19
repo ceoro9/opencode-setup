@@ -48,6 +48,12 @@ Before making changes:
 
 ---
 
+# OpenViking Memory Recall
+
+Before non-trivial investigation, planning, or implementation, search OpenViking long-term memory for the task, project, system, and relevant decisions using `openviking_search` or `openviking_find`. Use relevant results as context; do not treat them as verified without checking current repository or service state.
+
+Search again when investigation reveals a potentially relevant project-specific decision, deployment detail, prior incident, or established constraint not covered by the initial query. Memory indexing is asynchronous: after `openviking_remember`, do not immediately query for the new memory; state the concise stored summary and that it will become searchable after indexing. If OpenViking tools are unavailable or fail, proceed with normal evidence gathering and state the gap when material. Never store or retrieve credentials, API keys, tokens, passwords, private keys, or raw secret configuration.
+
 # Task Intake
 
 Before implementing:

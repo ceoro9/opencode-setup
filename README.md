@@ -126,6 +126,34 @@ OpenCode loads `~/.config/opencode-mcps/*.json` and `*.jsonc` at startup. Set `O
 
 The directory is optional and remains outside this shared configuration repository. Quit and restart OpenCode after changing these files.
 
+## OpenViking semantic search
+
+The [`openviking-opencode`](https://www.npmjs.com/package/openviking-opencode) plugin (declared in `opencode.jsonc`) adds semantic search across indexed repositories. It shells out to the `ov` CLI, which is a Python package that talks to a remote OpenViking server. The server, credentials, and CLI are all host-specific, so nothing is committed; `npm run openviking:reconcile` (also run on `postinstall`) provisions them from environment variables.
+
+Set these per machine, for example in your shell profile:
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `OPENVIKING_SERVER_URL` | yes | Base URL of the remote OpenViking server, e.g. `https://host.sslip.io`. |
+| `OPENVIKING_API_KEY` | yes | User or admin API key for data access. The server runs `api_key` auth; the root key cannot access data APIs. |
+| `OPENVIKING_LANGUAGE` | no | CLI display language; defaults to `en`. |
+
+The reconcile step:
+
+- writes `~/.openviking/ovcli.conf` (server URL and API key) and `~/.openviking/ovcli.settings.conf` (language), and
+- installs the `ov` CLI when missing, preferring `pipx install openviking`, then `uv tool install openviking`, and finally `pip install --user openviking`.
+
+Every step is non-fatal: machines without the variables, without Python, or offline skip cleanly so `npm install` never breaks. When the variables are unset, the plugin simply stays idle.
+
+Verify the client after reconciliation:
+
+```bash
+ov health
+ov ls viking://resources/
+```
+
+Then, from OpenCode, index and search repositories conversationally, for example "Add https://github.com/tiangolo/fastapi to OpenViking" followed by questions about that project. If `ov` is installed but not on `PATH`, add the `pipx`/`pip --user` bin directory to `PATH`.
+
 ## Commands
 
 | Command | Purpose |
@@ -140,6 +168,9 @@ The directory is optional and remains outside this shared configuration reposito
 | `/review` | Perform a standalone read-only code review. |
 | `/prepare-pr` | Run final readiness review and automatically create the PR when it passes. |
 | `/verify-deployment` | Verify pipeline and deployment state without changing remote systems. |
+| `/memorize` | Store explicitly supplied non-secret facts in OpenViking long-term memory. |
+| `/memorize-session` | Extract and store durable non-secret knowledge from the current session. |
+| `/recall` | Delegate isolated deep OpenViking memory and AGFS retrieval for a task. |
 
 ## Agents
 
