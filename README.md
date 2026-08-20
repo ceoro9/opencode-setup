@@ -177,6 +177,7 @@ Then, from OpenCode, index and search repositories conversationally, for example
 | Agent | Responsibility |
 | --- | --- |
 | `facilitator` | Default host-read-only primary agent; manages persistent AgentENV workers, concurrent tasks, model routing, and result assessment. |
+| `keeper` | Primary agent for autonomous task and time management; interprets free-form activity updates and status questions, storing tasks in OpenViking. |
 | `code-architect-fast` | High-level reasoning and concise execution planning. |
 | `code-review-intermediate` | Optional tool-free patch drift check for implementation cycles and `/review`. |
 | `test-reviewer` | Optional tool-free test evidence check; not used during implementation cycles. |
